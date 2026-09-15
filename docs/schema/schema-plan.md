@@ -3577,6 +3577,41 @@ exist live yet, and the delete-rule half is a no-op there (live still reads plai
 `ON DELETE CASCADE`). The half that *is* missing live is `on update cascade` — which only
 matters once `0120` lands. The order to apply them in is `0120` then `0122`, together.
 
+### 15 September — the advisors' housekeeping: a backup, six indexes and one policy (`0123`)
+
+The second Stage 0 branch from the audit, `claude/stage0-hygiene`. Three advisor findings, no
+change to the model, and the one decision it needed was Amber's on 15 September: *"Yes, drop
+it"*.
+
+**The backup.** `private.profiles_backup_pre_batch3` was a hand-made copy of `profiles` from
+16 August, in the pre-rename column names: 47 rows then, and `profiles` has 47 now. RLS off,
+nothing reading it, never in a migration, so no rebuild ever had it. The security advisor called
+it critical for what it held rather than for who could reach it, since `private` is not exposed
+through the API. Dropped, `if exists`, because the replay has nothing to drop.
+
+**Six indexes**, on the foreign keys of the tables the process rebuild writes into, each a
+column rows are looked up by: `notifications.notification_type_id`,
+`process_runs.process_run_waiting_on`, `property_values.property_value_profile_id`,
+`report_documents.report_template_id`, `report_documents.report_document_published_document_id`
+and `tasks.process_task_id`. Row counts on the day were 4, 11, 32, 8, 8 and 1, so nothing was
+slow and no index here can be watched making anything faster. They exist because the FK check
+on a parent's delete scans the child without one, and because an index on an empty table costs
+nothing where the same index on a full table later takes a lock. The hundred-odd `*_by` columns
+to `profiles` stay unindexed on purpose: stamped and read with the row, never searched, and a
+profile is deactivated rather than deleted.
+
+**The policy.** `"read own login_activity"` was the one policy left with a bare `auth.uid()` and
+`current_permission()`, evaluated per row; `0049` already used `(select …)` on `profiles`.
+Rewritten in that form: same rows to the same people. `rls.sql` proves it at `user`, none of
+another person's sign-ins visible, and first asserts as the owner that another person's sign-ins
+exist to be hidden.
+
+**Watched failing** before it was applied, live: the backup present, zero of six indexes, the
+policy's expression carrying the bare call. **Dry-run live** in a rolled-back transaction the
+same afternoon: the file applies, its proof passes, and the rollback was checked to have held
+(47 backup rows, no new index, the old policy text). Not applied live by the branch: it drops a
+table, so the moment is Amber's call.
+
 ## 15 September — Microsoft 365: one home each, and a window onto it
 
 Lofty has created a Microsoft Team called **Hub** with its own SharePoint site, and it is the
@@ -3886,6 +3921,47 @@ Settled on 15 September: no new Teams, channels or sites; files in the Hub libra
 (formerly Finance) named so everywhere a person reads it; `tech@lofty.com.au` as the sender;
 A&D's linked folder on every project.
 
+### 15 September — the group column gets its name (`0124`)
+
+The third Stage 0 branch from the audit, `claude/stage0-property-group`. One rename, no new
+column, nothing rendered the old name.
+
+**What it was.** `property_defs.property_def_automation`, made by `0043` for a note about how a
+value might arrive on its own. Nothing ever wrote one. The workbook of 3 September had a column
+headed *Group*, and `0090` carried its words into this column because it was the spare text
+column, saying in its header that they *"look far more like a stage group than like an
+automation note"* and that moving them was a schema change Amber had not asked for. `0092`
+added eighteen more on the same terms. By 15 September: 139 of 266 rows carried a group word
+under a name that says automation, no view, function, policy or screen read it, and the
+Automations tab said *"Not built yet. A property definition can already name an automation"*,
+which was not true.
+
+**What it holds, on the day.**
+
+| Stage | Group words (rows) |
+| --- | --- |
+| Construction | Footings 15, Frame 12, Roof Cover 6, External Cladding 16, 2nd Fix 16, Practical Completion 28, Handover 14 |
+| Pre-construction | Working Drawings 3, Selections 6, Site Survey 2, Soil - Bore Logs 2, SA Water 6, Section 221 - Stormwater/Crossover Permits 2, Retaining, Fencing & BOB 11; 106 rows with none |
+| Everything else | none |
+
+**What that means for the model** (inference from the words, not a decision): the Construction
+words are the build's sub-stages in build order, and the Pre-construction words are the
+processes Amber walked through on 15 September. The column is two things wearing one header.
+Stage 1 makes sub-stages rows (`lifecycle_substages`) and Stage 2 gives processes their steps,
+so each takes its half then; until then the column is free text under the honest name, and the
+migration that gives each half a home moves these words with it, which is what `0092` said
+would happen.
+
+**Why a rename rather than a new column.** Postgres renames in place: values, grants and
+dependents come along, and there are no dependents. `types.ts` and the repository read `group`
+from the same deploy; the dictionary entry and the Automations tab's text are corrected. The
+dictionary's *proposed* entry for a `property_defs.automation` that would trigger things is left
+as it stands, because automations belong in the Stage 4 registry and the dictionary itself is
+going (audit decision 11).
+
+**Proof:** the old name absent, the new one present, and at least one row carrying a group,
+which `0090`'s seed guarantees on a replay. Watched failing live before the rename. Dry-run live
+in a rolled-back transaction and checked to have rolled back. Applied when Amber says.
 ### 15 September — notifications wait for the switch-on (`0125`)
 
 The fourth Stage 0 branch from the audit, `claude/stage0-notifications`. Amber, 15 September,

@@ -56,7 +56,18 @@ things a process runs on; the offer machinery, the import staging table, the fou
 scaffolding and the whole dictionary go; email and Teams stay, send nothing queued before
 switch-on, and default off until testing; the completion rule lives in the database; a job is
 overdue when its target completion has passed; Maintenance has three sub-stages, 1 Month, 2
-Month and 3 Month. **Nothing is built yet.** Stage 0 needs no further decision.
+Month and 3 Month. **Nothing is built yet.** Stage 0 needs no further decision. One of its items is withdrawn:
+the audit said completing a process writes no audit row because `process_runs` was not in the
+allowlist; `0080` removed the allowlist and the trigger is there, with 12 live rows. Corrected
+in the audit record and on the page.
+
+**Stage 0 began the same afternoon, one branch per item, `claude/stage0-<topic>`.** The first,
+`claude/stage0-checks`: `scripts/check-migrations.mjs` refuses a fourth shared migration number
+(`0073`, `0119` and `0120` are allowed by name; a planted second `0001` was watched being
+refused); the 26 `FAIL` lines turned out to be `constraints.sql` run without `behaviour.sql`'s
+fixtures, not a guard the harness could not read, and the file now says so in one line; *"five
+lifecycle phases"* is seven in the two places it was wrong. `check.sh` on `main` is green, 79
+probes. The record of what each item was is in the audit file's *Stage 0* section.
 
 **Found the same afternoon, and fixed in part:** the live ledger did not carry `0119`
 (`the_date_the_slas_say`) or `0120` (`a_community_title_job_shows_a_c`) although PR #88 had
@@ -69,6 +80,12 @@ file on this branch now reads drop the old rule, rename, add the new rule. **Amb
 same afternoon and `0120` (corrected) and `0122` are applied too**: nine jobs carry their `c`,
 every child row followed, and the ledger matches `main`. Open question 0g records it.
 
+**Stage 0's third branch, `claude/stage0-property-group`, is `0124`:** `property_defs.property_def_automation`
+becomes `property_def_group`, the workbook's own header for what it holds (Footings, Frame,
+2nd Fix; Working Drawings, SA Water). Nothing rendered the old name. The words turn out to be
+Construction's sub-stages and Pre-construction's processes, so Stages 1 and 2 each take a half
+when they land; `schema-plan.md` has the counts. Not applied live yet.
+
 Two standing costs of the proof blocks, both now visible live: `0119`'s and `0120`'s probes each
 consumed a project number (1995 and 1996 will never exist; `0122` restores its sequence, the
 other two do not), and **`0122`'s proof leaks three address rows** on every run, the two job
@@ -76,6 +93,13 @@ addresses and the project address that `import_spine` inserts for the probe, bec
 cleanup deletes only the address it inserted itself. The three orphan *Probe Street 0122*
 rows and their audit-trail rows were removed live on 15 September; the leak in the file is not
 fixed, and is a one-line addition to the proof's cleanup for whoever next touches `0122`.
+
+**Stage 0's second branch, `claude/stage0-hygiene`, is `0123`:** the profiles backup dropped, six
+foreign keys on the process tables indexed, and `"read own login_activity"` rewritten into the
+once-per-query form the advisor asks for. No column changes, so `types.ts` and `dictionary.ts`
+do not move; `schema-plan.md` carries the entry and `rls.sql` the probes. Dry-run live in a
+rolled-back transaction. **Not applied live yet**: it drops a table, so the moment is Amber's
+call, and the question is in the chat.
 
 ---
 
@@ -505,11 +529,15 @@ In dependency order. None of it is started.
 
 ### Things that are wrong and are nobody's current task
 
-- **`app/supabase/verify/constraints.sql` reports 26 `FAIL:` lines on `main`.** Unchanged by
-  any of this work — 26 before, 26 after. They are probe fixtures planting a job at a
-  locality-only address, which `guard_job_address_is_a_street` correctly refuses while the
-  harness's expected-error matcher does not recognise the message. **`check.sh` therefore
-  exits non-zero for everyone**, which is how a harness stops being trusted. Its own branch.
+- **`app/supabase/verify/constraints.sql` reported 26 `FAIL:` lines on `main`.** Corrected
+  15 September, Stage 0. The 26 appear only when the file is run on its own after a bare
+  replay: every one says project 9106 or job 9106-002 is missing, and those are the fixtures
+  `behaviour.sql` plants. `check.sh`, which runs the two in order, was green on `main` when
+  the fix was made: 79 probes, all biting. The 14 September reading, a locality address the
+  street guard refused and a matcher that could not read the message, was wrong; the first
+  address in the table is 3 Deans Road, a street, by heap order alone. The file now checks
+  for its fixtures first and reports one line naming them, and the three job probes take the
+  fixture job's own address rather than whichever row is physically first.
 - **All 38 Pre-construction processes carry no SLA estimate**, as do both Acquisition &
   Development ones. Only Construction is populated. `0119` is built and deliberately returns
   nothing until Amber fills them in; `job_calculated_completion_missing` counts what is
@@ -524,8 +552,10 @@ In dependency order. None of it is started.
 
 There are **seven** lifecycle stages, not five — Closed and Cancelled are still stages.
 Checked against `jobs_stage_is_a_lifecycle_stage`, which admits seven. `supabaseRepository.ts`
-calling Acquisition & Development *"the first of the five lifecycle phases"* is the loose
-part, and is still there.
+calling Acquisition & Development *"the first of the five lifecycle phases"* was the loose
+part; corrected 15 September (Stage 0), with the same word in `dictionary.ts`. The two "five"
+comments left are true as written: `StageTrack.tsx` draws five of the seven on purpose, and
+`savedViews.ts` narrates the 0035 cut as history.
 
 ---
 

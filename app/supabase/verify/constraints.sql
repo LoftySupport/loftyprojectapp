@@ -11,6 +11,18 @@ DECLARE
   -- as itself rather than as a NULL update.
   no_number uuid;
 BEGIN
+  -- Every probe below aims at rows behaviour.sql plants: project 9106 and job 9106-002. Run
+  -- on its own after a bare replay, this file reported 26 FAIL lines on 14 September, every
+  -- one of them "the fixture is gone" or "9106-002 does not exist" — read at the time as a
+  -- locality address the street guard refused, and recorded in HANDOFF.md as a harness that
+  -- exits non-zero for everyone. It was neither: check.sh was green, and the file had been
+  -- run without the fixtures it needs. Twenty-six constraints that have "stopped biting" is
+  -- the wrong report for one missing fixture, so say that once and stop.
+  IF NOT EXISTS (SELECT 1 FROM jobs WHERE job_id = '9106-002') THEN
+    RAISE WARNING 'FAIL: fixtures missing — project 9106 and job 9106-002 are planted by behaviour.sql. Run check.sh, not this file on its own.';
+    RETURN;
+  END IF;
+
   BEGIN
     INSERT INTO addresses (address_lot_number,address_street_1,address_suburb,address_postcode,address_council)
     VALUES ('1','X St','Golden Grove','512','City of Tea Tree Gully');
@@ -81,9 +93,14 @@ BEGIN
   -- accepted, and the probe reported that the unique constraint had stopped biting. It
   -- was right — that is what sent jobs_sequence_is_padded into 0073, so that the two
   -- spellings of job 2 can no longer both exist.
+  --
+  -- The address is the fixture job's own, here and in the two probes after it, so each one
+  -- meets the constraint it is aimed at and not guard_job_address_is_a_street. `FROM addresses
+  -- LIMIT 1` took whichever row is physically first; that is a street today by heap order
+  -- and nothing else.
   BEGIN
     INSERT INTO jobs (project_id,job_sequence,job_original_address_id,job_current_address_id,job_owning_team,job_created_by)
-    SELECT 9106,'002',address_id,address_id,'design',(SELECT profile_id FROM profiles LIMIT 1) FROM addresses LIMIT 1;
+    SELECT 9106,'002',job_current_address_id,job_current_address_id,'design',(SELECT profile_id FROM profiles LIMIT 1) FROM jobs WHERE job_id='9106-002';
     RAISE WARNING 'FAIL: duplicate job_sequence within a project accepted';
   EXCEPTION WHEN unique_violation THEN RAISE NOTICE 'ok  unique(project_id,job_sequence) rejected a duplicate';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  unique(project_id,job_sequence) rejected a duplicate)', SQLERRM; END;
@@ -93,7 +110,7 @@ BEGIN
   -- an unpadded '2' beside an existing '002' is two jobs a person reads as one.
   BEGIN
     INSERT INTO jobs (project_id,job_sequence,job_original_address_id,job_current_address_id,job_owning_team,job_created_by)
-    SELECT 9106,'7',address_id,address_id,'design',(SELECT profile_id FROM profiles LIMIT 1) FROM addresses LIMIT 1;
+    SELECT 9106,'7',job_current_address_id,job_current_address_id,'design',(SELECT profile_id FROM profiles LIMIT 1) FROM jobs WHERE job_id='9106-002';
     RAISE WARNING 'FAIL: an unpadded job_sequence was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  jobs_sequence_is_padded rejected ''7''';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  jobs_sequence_is_padded rejected 7)', SQLERRM; END;
@@ -101,7 +118,7 @@ BEGIN
   -- The other side: a four-digit number past 999 is legal, and a zero-padded one is not.
   BEGIN
     INSERT INTO jobs (project_id,job_sequence,job_original_address_id,job_current_address_id,job_owning_team,job_created_by)
-    SELECT 9106,'0100',address_id,address_id,'design',(SELECT profile_id FROM profiles LIMIT 1) FROM addresses LIMIT 1;
+    SELECT 9106,'0100',job_current_address_id,job_current_address_id,'design',(SELECT profile_id FROM profiles LIMIT 1) FROM jobs WHERE job_id='9106-002';
     RAISE WARNING 'FAIL: a four-digit job_sequence with a leading zero was accepted';
   EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  jobs_sequence_is_padded rejected ''0100''';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  jobs_sequence_is_padded rejected 0100)', SQLERRM; END;

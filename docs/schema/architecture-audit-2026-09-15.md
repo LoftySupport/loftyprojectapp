@@ -83,16 +83,21 @@ typed `job_status`.
    auto-advance of the lifecycle (agreed 24 August)"*), changes no team, creates no tasks
    unless Add checklist is pressed, does not refuse when required properties are missing
    (a chip reads *"2 required missing"*; 6 of 140 links are required at all), notifies only
-   if `process_key LIKE 'working_drawings%'`, and writes no audit row (`process_runs` is not
-   in the allowlist). Stages 2 and 3.
+   if `process_key LIKE 'working_drawings%'`. Stages 2 and 3. **Corrected 15 September:** the
+   first version of this finding also said it writes no audit row because `process_runs` was
+   not in the allowlist. Wrong: `0080` removed the allowlist, the trigger is on `process_runs`,
+   and 12 audit rows exist for it live. The claim came from reading `0030` and `0077` without
+   `0080`, and the Stage 0 item built on it is withdrawn.
 6. **Twelve things change data without a person, and the Automations tab says "Not built
    yet".** The project-follows-slowest-job trigger, the cascade, the twelve-month archive,
    `notify_scan` (every 15 minutes), `maintenance_scan` (every 15 minutes, over an empty
    table), four notify triggers, the working-drawings prefix, the address move, the job-number
    resync, the forecast, the property push. None has a name in the app, an on/off, or a log.
    `processes.process_automation` is null on all 51 rows and read by nothing;
-   `property_defs.property_def_automation` holds a block name on 139 rows and is rendered under
-   the label *Automation*. Stage 4.
+   `property_defs.property_def_automation` holds a block name on 139 rows. Stage 4.
+   **Corrected 15 September:** the first version said the Properties screen renders that column
+   under the label *Automation*; a search of the screen finds no such control. Misnamed and
+   unread, not misnamed and shown; the Stage 0 rename stands.
 7. **Four email notifications have waited since 12 September because the worker is not
    deployed.** The repo holds four edge functions; the live project has one, `report-share`.
    `notification_deliveries`: 4 in-app sent, 3 email held, 1 email queued. Eight of fifteen
@@ -118,7 +123,10 @@ typed `job_status`.
     names 181 methods and omits `listTasks` (implemented since `0102`), so it reports the
     Tasks board as not wired. `releases` duplicates the trailer-generated changelog. Three
     migration numbers are used twice. `verify/constraints.sql` reports 26 `FAIL` lines on
-    `main`. Two icon modules, one export and one script are dead. Stages 0 and 5.
+    `main` (**corrected 15 September:** only when run on its own; the 26 are its fixtures
+    missing, which `behaviour.sql` plants. `check.sh` on `main` is green, 79 probes, and the
+    file now says so in one line). Two icon modules, one export and one script are dead.
+    Stages 0 and 5.
 11. **Advisors.** Critical: `private.profiles_backup_pre_batch3`, a 16 August copy of
     `profiles` with RLS off (not API-reachable, still a copy of every person's row). By design:
     `maintenance_message_secrets` no policy; four `SECURITY DEFINER` helpers callable by
@@ -216,11 +224,12 @@ The full catalogue is on the published page. By verdict:
 
 One table per PR throughout. Sizes: small is a session, medium a few, large a week of sessions.
 
-**Stage 0, housekeeping (small, now).** Fix the 26 `FAIL` lines; refuse a fourth duplicated
-migration number; add `process_runs` to the audit allowlist; rename or clear
-`property_def_automation`; decide the email worker; drop the profiles backup; index the hot
-foreign keys; fix the `login_activity` policy; delete the dead code; correct *"five phases"*.
-Needs: the backup drop, the email decision.
+**Stage 0, housekeeping (small, now).** ~~Fix the 26 `FAIL` lines~~ (done 15 September, and
+not what it seemed: see finding 10 and the *Stage 0* section below); ~~refuse a fourth
+duplicated migration number~~ (done); ~~add `process_runs` to the audit allowlist~~ (withdrawn,
+it already has one); rename or clear `property_def_automation`; decide the email worker; drop
+the profiles backup; index the hot foreign keys; fix the `login_activity` policy; delete the
+dead code; ~~correct *"five phases"*~~ (done). Needs: the backup drop, the email decision.
 
 **Stage 1, one lifecycle and real sub-stages (medium, two migrations).** `lifecycle_stages`
 from `pipeline_stages`; `lifecycle_substages` backfilled from `process_stage_group`;
@@ -278,7 +287,9 @@ against every `create table` and `create view`; the `WIRED` list against the imp
 `HANDOFF.md`, `open-questions.md`, `schema-plan.md`, the job-record handoff.
 
 Not done: no migration was written and nothing on the live project was changed. `check.sh` was
-not run here; its 26 failures are `HANDOFF.md`'s report of 14 September.
+not run here; its 26 failures are `HANDOFF.md`'s report of 14 September. **Run 15 September
+for Stage 0:** green on `main`, 79 probes. The 26 come only from running `constraints.sql`
+alone; finding 10 carries the correction.
 
 ## Revision 2, 15 September: what was decided
 
@@ -333,3 +344,28 @@ is recorded under `0120` in `schema-plan.md`.
 **Where this leaves the plan.** Nothing in Stage 0 waits on a decision any more, and Stages 1
 to 5 each have theirs. Nothing is built yet; the next step is the Stage 0 pull requests, one
 table each.
+
+## Stage 0, 15 September: the first pull request
+
+`claude/stage0-checks`. Three of the ten items, none a migration:
+
+- **The 26 `FAIL` lines were not a broken harness.** `check.sh` on `main` replays, runs
+  `behaviour.sql`, then `constraints.sql`, and is green: 79 probes, all biting. Replaying and
+  then running `constraints.sql` on its own gives exactly 26 `FAIL` lines, every one of them
+  *"the fixture it targets is gone"* or *"job 9106-002 does not exist"*, because project 9106
+  and its job are planted by `behaviour.sql`. That is what 14 September saw and misread: the
+  first address by heap order is 3 Deans Road, a street, so no locality was ever refused. The
+  file now checks for its fixtures first and reports one line naming them (watched: replay,
+  run it alone, one `FAIL`), and the three job probes take the fixture job's own address
+  rather than whichever address row is physically first.
+- **A fourth shared migration number is refused.** `scripts/check-migrations.mjs` does this
+  with or without credentials, so CI refuses it on every push; `0073`, `0119` and `0120` are
+  allowed by name because the live column comments cite those numbers. Watched: a planted
+  second `0001` was refused and both files named.
+- **"Five lifecycle phases" is seven** in `supabaseRepository.ts` and `dictionary.ts`, with the
+  data dictionary regenerated. `StageTrack.tsx` still says five, correctly: it draws five of
+  the seven on purpose. `savedViews.ts` narrates the 0035 cut as history.
+
+Left for the next Stage 0 branches: the hygiene migration (the backup drop, the six indexes,
+the `login_activity` policy), the `property_def_automation` rename, the notification defaults,
+and the dead code, which Amber's rule says to ask about before deleting.
