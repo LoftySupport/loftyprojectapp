@@ -3510,6 +3510,59 @@ bit: *a comment on the issue did not carry the job, so it is missing from the jo
 **Applied to the live project and verified there**, inside a rolled-back transaction.
 
 
+### 15 September — the importer asks the database what it just named the job (`0122`)
+
+**`check.sh` was failing on `main`, and what it was failing on was Phase B.** The workbook
+load raised
+
+```
+ERROR: insert or update on table "import_staging_jobs" violates foreign key
+       constraint "import_staging_jobs_import_staging_job_job_id_fkey"
+```
+
+796 jobs across 116 projects stopped at the first community-title one.
+
+**How it got there.** `0120` (#88's, the community-title one) made `job_number()` the single
+source of a job's id, so a community-title job is `1004-003c`. `import_spine` never got the
+message: it inserted the job, the trigger named it `1004-003c`, and three lines later the
+function wrote the id it *expected* into the staging row —
+`import_staging_job_job_id = project_no::text || '-' || seq`, `1004-003`. That column has a
+foreign key to `jobs`. No such job.
+
+**The fix is not the one first proposed, and the difference is the whole lesson.** Calling
+`job_number(project_no, seq, title_type)` in the importer too would work today — the break
+that substituted it **passed**, which is the proof it would have. It also rebuilds the same
+failure the next time the naming rule changes, because it is still a *second place computing
+a job's name*. So the importer stops computing the id at all and reads it back:
+
+```sql
+insert into jobs (…) values (…) returning job_id into made_job;
+```
+
+Nothing else in the function changes. `0109`'s body, verbatim, with one declared variable,
+the `returning`, and `made_job` in the update.
+
+**A second failure was hiding behind the first.** `check.sh` aborted at the load, so every
+assertion after it had not run in days. With the import working, the next one along failed:
+*FAIL: 1 documents survived their job*. `0120` needed `on update cascade` on
+`report_documents_job_id_fkey` so a job renamed to `1004-003c` carried its documents, and
+rebuilt the constraint to get it — **changing the delete half from `cascade` to `set null` at
+the same time, without saying so** in the header, the comment or the changelog. Its four
+siblings on `jobs` (`comments`, `document_links`, `tasks`, `variations`) are all still
+`on delete cascade`. Restored, keeping the update cascade `0120` correctly added.
+
+**Three breaks watched.** The hand-built id restored → the original foreign key violation
+returns. `job_number()` substituted → **passes**, recorded above. The delete rule set back to
+`set null` → *FAIL: 1 documents survived their job*.
+
+**Not applied live, and it does not need to be yet.** Verified on 15 September against the
+live project: **neither of #88's two migrations is applied there** — the ledger reports
+NEITHER IS APPLIED for `a_community_title_job_shows_a_c` and `the_date_the_slas_say`,
+`job_number()` does not exist, and no job carries a `c`. So the bug `0122` fixes does not
+exist live yet, and the delete-rule half is a no-op there (live still reads plain
+`ON DELETE CASCADE`). The half that *is* missing live is `on update cascade` — which only
+matters once `0120` lands. The order to apply them in is `0120` then `0122`, together.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
