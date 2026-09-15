@@ -14,6 +14,7 @@ says shipped and what the app shows people cannot use different words for it.
 
 ### Added
 
+- the Microsoft Graph modules for SharePoint folders, Teams channel posts and mailbox reading, with a check that mail routes to the right job, folder names are legal and Teams mentions resolve
 - Community title jobs now carry a "c" in the job number itself — 1004-003c. Mark a job community title and its number updates everywhere it is used; correct it back and the c goes away. The project number and the three-digit job code never change, and the numbering still runs straight through both title types.
 - A maintenance issue keeps a history of who changed what, including the photos, tasks and comments on it
 - A maintenance issue carries its own comments, activity and tasks, so a repair shows on the Tasks board beside everything else

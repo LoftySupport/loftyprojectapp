@@ -5,13 +5,13 @@ Everything a new session needs to pick this up. Read this first, then `docs/sche
 <!-- generated:shipped -->
 **No release has been published yet.** See [CHANGELOG.md](CHANGELOG.md) for what is waiting.
 
-Unreleased: 286 changes since then —
+Unreleased: 287 changes since then —
+- Added: the Microsoft Graph modules for SharePoint folders, Teams channel posts and mailbox reading, with a check that mail routes to the right job, folder names are legal and Teams mentions resolve
 - Changed: The lifecycle's stages are a table managers can see, and superadmins can extend, instead of a list fixed in code
 - Fixed: Two Microsoft endpoints would answer anybody while their secret was unset
 - Fixed: the workbook import no longer stops at the first community-title job
 - Fixed: deleting a job removes its report documents again, as it did before 0120
-- Changed: A maintenance issue is edited in the same layout it was logged in, with tasks, comments, activity and documents beneath it
-- …and 281 more.
+- …and 282 more.
 
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
