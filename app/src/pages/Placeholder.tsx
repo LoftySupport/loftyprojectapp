@@ -1,13 +1,11 @@
-import { EmptyState, Heading } from "@vibe/core";
+import { Heading } from "@vibe/core";
 import type { ReactNode } from "react";
 
 /**
- * A page with its chrome in place and nothing to show yet. Every screen starts here
- * and grows real content as its table comes online — which also means the empty states
- * get designed rather than discovered on a fresh tenant.
- */
-/**
- * A page's heading, and nothing under it.
+ * A page's heading, and nothing under it. Every screen starts here and grows real content
+ * as its table comes online. (`NotWired`, the "not wired yet" panel that used to live
+ * beside this, went on 15 September: every table it was written for is wired, and nothing
+ * had imported it for weeks.)
  *
  * Amber, 12 September: *"on all pages remove descriptive line text under page header …
  * we need the most above the fold possible"*. The subtitle went from every page in the
@@ -33,13 +31,5 @@ export function PageShell({
       </div>
       {children}
     </>
-  );
-}
-
-export function NotWired({ table, description }: { table: string; description: string }) {
-  return (
-    <div className="panel">
-      <EmptyState title={`${table} is not wired yet`} description={description} />
-    </div>
   );
 }

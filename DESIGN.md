@@ -25,8 +25,7 @@ explicit instruction that readability and familiar product patterns come first.
 | `app/src/theme/tokens.css` | The application layer: imports the mirror, then re-declares the semantic tokens at the specificity Vibe requires |
 | `app/src/theme/loftyTheme.ts` | The brand tokens Vibe's `ThemeProvider` carries, as literals it can read — 24 values across three themes, checked against the mirror |
 | `app/src/theme/accents.ts` | The board's colour rule — the lifecycle ramp |
-| `app/src/theme/loftyIcons.tsx` | The eight Lofty construction glyphs from the design system |
-| `app/src/theme/houseIcons.tsx` | Three hand-drawn nav icons that predate the design system |
+| `app/src/theme/railIcons.tsx` | The six Lofty glyphs the navigation rail points at, traced from the 11 September SVG handover |
 
 There is no fifth place. A colour that is not in one of these is a colour nobody decided.
 
@@ -286,9 +285,12 @@ surface — matches what `check-contrast.mjs` measures, to one decimal place.
 
 ## Iconography
 
-`@vibe/icons` for the 277 Vibe glyphs. `loftyIcons.tsx` for eight Lofty construction glyphs
-Vibe does not ship — Approval, Company, Costs, Delivery, Drawings, Estimating, Materials,
-Safety. Filled 20×20, painting from `currentColor`, so an icon always inherits its context.
+`@vibe/icons` for the 277 Vibe glyphs. `railIcons.tsx` for the six Lofty glyphs the rail
+points at, traced from the SVGs Lofty handed over on 11 September. Filled 20×20, painting from
+`currentColor`, so an icon always inherits its context. (`loftyIcons.tsx`, eight construction
+glyphs copied from the design project, and `houseIcons.tsx`, three hand-drawn nav icons, were
+imported by nothing after the rail moved to the handover set and went on 15 September; git has
+them.)
 
 **Sizes** 14 xs controls · 16 buttons, table cells, menu items · 18 nav, attention boxes ·
 20 default · 24 empty states. **Colour** neutral by default; orange only when the icon *is*
@@ -301,7 +303,7 @@ Seven further Lofty glyphs exist in the design project but are **not usable**: t
 wrappers around a PNG rather than vectors — checked again on the 7 September sync, when
 `Projects.svg` and `JobHouse.svg` were still a single `<image>` element, by then with no
 `href` at all — so they render nothing and cannot take `currentColor`. They need
-re-exporting. `houseIcons.tsx` covers the three the app actually uses in the meantime.
+re-exporting. The rail draws its six from `railIcons.tsx` in the meantime.
 
 ## Words are design material
 
