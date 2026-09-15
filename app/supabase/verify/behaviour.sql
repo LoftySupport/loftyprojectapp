@@ -1375,3 +1375,72 @@ select case when job_health is not distinct from job_health(:'s48_job')
 from job_display where job_id = :'s48_job';
 
 rollback;
+
+-- ============================================================================
+-- 49. The person on a job and the day it ended are read from the work (0134)
+--
+-- In one transaction, rolled back.
+-- ============================================================================
+\echo '--- 49. a job names whoever holds tasks in its active process, and stamps its end date (0134)'
+begin;
+
+select job_id as s49_job from jobs
+ where job_stage not in ('Completed', 'Closed', 'Cancelled') order by job_id limit 1 \gset
+
+select case when job_active_process(:'s49_job') is null
+            or (select p.lifecycle_substage_id from processes p
+                 where p.process_id = job_active_process(:'s49_job')) = job_open_substage(:'s49_job')
+  then 'ok  the active process sits in the sub-stage the job is up to'
+  else 'FAIL: the active process is somewhere else' end;
+
+-- Start the active process and give its first task to somebody.
+insert into process_runs (process_id, job_id, process_run_status)
+select job_active_process(:'s49_job'), :'s49_job', 'in_progress'
+ where job_active_process(:'s49_job') is not null
+on conflict do nothing;
+
+select process_run_id as s49_run from process_runs
+ where job_id = :'s49_job' and process_id = job_active_process(:'s49_job')
+ order by process_run_attempt desc limit 1 \gset
+
+select profile_id as s49_person from profiles where profile_is_active order by profile_email limit 1 \gset
+
+insert into tasks (job_id, task_name, process_run_id, task_assignee_id, task_position)
+values (:'s49_job', 'behaviour probe 0134', :'s49_run', :'s49_person', 1);
+
+select case when job_assignee_id = :'s49_person'
+  then 'ok  the job names whoever holds the first open task in its active process'
+  else 'FAIL: the job names ' || coalesce(job_assignee_id::text, 'nobody') end
+from jobs where job_id = :'s49_job';
+
+-- Finishing that task takes the name off again, because nobody holds an open one.
+update tasks set task_status = 'done' where task_name = 'behaviour probe 0134';
+select case when job_assignee_id is null
+  then 'ok  and lets it go when nobody holds an open task — an em dash, not a stand-in'
+  else 'FAIL: the job still names ' || job_assignee_id::text end
+from jobs where job_id = :'s49_job';
+
+-- The end date is stamped when nothing required is open anywhere, and never taken back.
+update jobs set job_end_date = null where job_id = :'s49_job';
+insert into process_runs (process_id, job_id, process_run_status)
+select p.process_id, :'s49_job', 'not_applicable'
+  from processes p
+ where p.process_is_active and not p.process_is_optional and p.process_scope = 'job'
+   and not exists (select 1 from process_runs r where r.process_id = p.process_id and r.job_id = :'s49_job');
+update process_runs set process_run_status = 'not_applicable'
+ where job_id = :'s49_job' and process_run_status not in ('complete', 'not_applicable');
+
+select case when job_end_date = current_date
+  then 'ok  the end date is stamped the day nothing required is left open'
+  else 'FAIL: the end date reads ' || coalesce(job_end_date::text, 'null') end
+from jobs where job_id = :'s49_job';
+
+-- Reopening work does not take the day back.
+update process_runs set process_run_status = 'in_progress'
+ where process_run_id = (select process_run_id from process_runs where job_id = :'s49_job' limit 1);
+select case when job_end_date = current_date
+  then 'ok  and reopening work does not take the day back — it is a fact about a day'
+  else 'FAIL: the end date was cleared to ' || coalesce(job_end_date::text, 'null') end
+from jobs where job_id = :'s49_job';
+
+rollback;

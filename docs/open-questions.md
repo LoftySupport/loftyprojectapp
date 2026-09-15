@@ -21,6 +21,42 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
+### 0l. The team and the person on a job are derived now. What happens to the two controls that set them?
+
+**Asked 15 September, while building Stage 3.** Blocks nothing — `0134` is written and not
+applied — but it decides whether two working controls stay on the screen.
+
+**What changed underneath them.** Amber, 14 September: the owning team *"is an assignment
+derived from the active process"* and *"it defaults to the earliest unfinished process in a
+jobs stage"*; and *"'currently with' is the task's assignee, not the job's"* — **whoever holds
+tasks in the active process**. `0134` builds the assignee half. A derived column and an
+editable control on the same field do not coexist: whatever somebody types is overwritten by
+the next task change, and they watched it work.
+
+**The override she asked for is not built.** *"a button next to it that requests control of
+job, eg 'Override Active Team' at which point the active team manager gets a notification that
+can either release the job to the new team or not … this process will need to be added as an
+automation in automations section to be refined."* That is Stage 4. Until it lands there is no
+sanctioned way to move a job to another team by hand.
+
+**What `0134` does meanwhile**, pending this answer: the *Currently with* picker on the job
+record is read-only and the two job-assignee actions are off the Jobs bulk bar. The Tasks board
+keeps its own, which is where the fact now lives. The owning team is untouched — its derivation
+is **not** in `0134`, because taking the team drop-down away without the handshake would leave
+nobody able to move a job at all.
+
+| Option | What it means |
+| --- | --- |
+| **Wait for the handshake** | Both controls stay as they are on the team, the assignee stays read-only, and the Override Active Team request lands in Stage 4 as the one way to move a job. Nothing is lost; the team column keeps being set by hand for a few weeks longer and the derivation waits |
+| **Derive both now, no override** | The team follows the active process immediately and the drop-down goes with the picker. Truthful, and it is what the 14 September answer says — but for those few weeks there is no way at all to move a job to another team, which is the thing the handshake exists to make possible |
+| **Derive both, keep a manager override** | Both derive, and a manager can pin either the way they pin the stage (`0132`). Cheap, consistent with the pin that already exists, and it quietly replaces the request-and-release she designed with a unilateral one |
+
+**Recommendation: wait for the handshake.** The assignee is safe to derive now because the
+Tasks board already has the control that sets it — the fact just moved one record down. The
+team has no such home until Stage 4, so deriving it now removes a capability with nothing
+standing in for it.
+
+
 ### 0j. Is every task inside a process required to finish it?
 
 **Stage 2 needs a value that has never existed.** `process_steps` (`0128`) gives every step a

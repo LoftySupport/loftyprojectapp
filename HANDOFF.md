@@ -108,6 +108,19 @@ sub-stage inside it. **The record's pill still reads `job_status`** and changes 
 becomes the pinnable *On hold* override, because splitting the two halfway would leave two
 screens showing different things under the same word.
 
+**`0134` derives the person on a job and the day it ended.** *Currently with* is the assignee
+of the earliest open task in the job's active process, kept in step by triggers on `tasks` and
+`process_runs`; `job_end_date` is stamped the day nothing required is open anywhere and is
+**never cleared** by the derivation, because a job that reopens work keeps the day it finished
+on. Two controls went read-only with it — the picker on the job record and the two job-assignee
+actions on the Jobs bulk bar — because a derived column and an editable control on the same
+field do not coexist. Assign the **task** and the job follows. **The owning team and the status
+are deliberately not in it:** the team's override is the *Override Active Team* handshake Amber
+parked into Stage 4, and taking the drop-down away before it lands would leave nobody able to
+move a job; the status derivation overlapped with health, which `0133` has now taken out of
+`job_status` entirely, so what is left to compute it from is worth asking again. **Question 0l**
+is open on the first of those.
+
 **A review of `0131` and the screens found fifteen things, and one was a hole.**
 `instantiate_process_steps` was SECURITY DEFINER and granted to `authenticated` — `0130`
 wrote it that way where the function it replaces had been invoker since `0081` — so the RPC

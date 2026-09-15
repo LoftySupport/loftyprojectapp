@@ -325,15 +325,20 @@ export function JobDrawer({ job, onClose, onMoved, siblings = [], onJump }: {
             onChangeAddress={() => setNewAddress({ suburb: "", postcode: "" })}
             onSetCompletion={iso => void saveWho({ targetCompletion: iso })}
             currentlyWithControl={
-              /* The job's team first, everybody else under "Other teams", each name with
-                 their team beside it (Amber, 7 Sep). This is the ONLY assignee picker on
-                 the job now — a second one sat in a "Who it's with" panel below writing the
-                 same column. */
+              /* READ-ONLY since 0134, and that is the point rather than a regression.
+                 "Currently with" is derived now — the assignee of the earliest open task in
+                 the job's active process — so a picker here would write a column the next
+                 task change overwrites, which is worse than no picker: somebody would watch
+                 it work. Assign the TASK and the job follows. Amber, 14 September: *"'currently
+                 with' is the task's assignee, not the job's"*, and *"whoever holds tasks in the
+                 active process"*. Open question 0l asks whether an override belongs here
+                 before the Override Active Team handshake lands in Stage 4. */
               <PersonSelect
                 aria-label="Currently with"
                 teamId={job.teamId}
                 value={job.assigneeId}
-                onChange={v => { if (v !== job.assigneeId) saveWho({ assigneeId: v }); }}
+                disabled
+                onChange={() => {}}
               />
             }
             /* The Process section's own body. Amber, 12 September: *"the process section

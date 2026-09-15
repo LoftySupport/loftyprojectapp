@@ -4705,6 +4705,56 @@ job all turn, then the target date override both ways, then a cancelled job goin
 Watched failing twice: with `private.worst_health` taking the BEST of the set, four probes
 reported; with the target-completion branch removed from `job_health`, the promise probe did.
 
+### 15 September — the person and the end date are read from the work (`0134`)
+
+Stage 3, its third migration, on the same branch. Two of the four derivations Amber asked for
+on 14 September; the other two are not here and the reason is the point.
+
+**The person.** *"Is the assignee a job field?"* — **no**: *"'currently with' is the task's
+assignee, not the job's"*. And with several open at once: *"whoever holds tasks in the active
+process"*, which she chose over *earliest unfinished task anywhere on the job* because it is
+the only reading that cannot name somebody from a team that is not on the job.
+`job_active_process()` is the process `0132` already computes, so *who is this with* is one
+question asked of one place. `jobs.job_assignee_id` stays a column and becomes its output,
+kept in step by triggers on `tasks` and `process_runs`, because the Team filter matches through
+it, the board groups on it and `notification_recipients` reads it.
+
+**The day it ended.** *"Target entered, end date derived"* — *"a person commits to the target,
+so a contracted handover date is not overwritten by process maths; the end date is stamped when
+the work is actually done"*. So `job_end_date` is stamped the day nothing required is open
+anywhere, which is what `job_derived_stage()` returning null already means — the same question,
+not a second one that could answer differently. **It is never cleared by the derivation**: a
+job that reopens work keeps the day it finished on, because that is a fact about a day rather
+than a status. Clearing it stays a person's act and the column stays writable. A cancelled job
+gets none: it did not end, it stopped.
+
+**Two controls went read-only, and that is the change to look at.** A derived column and an
+editable control on the same field do not coexist — whatever somebody types is overwritten by
+the next task change, and they watched it work. So the *Currently with* picker on the job
+record is read-only and the two job-assignee actions are off the Jobs bulk bar. The Tasks board
+keeps its own, which is where the fact now lives.
+
+**The owning team is deliberately NOT here.** Its derivation is decided — *"it defaults to the
+earliest unfinished process in a jobs stage"* — but its override is not: Amber asked for a
+request-and-release handshake (*"Override Active Team"*, the active team's manager releases it
+or does not) and parked it into Automations. Deriving the column now would take the team
+drop-down away with nothing standing in for it, and building the handshake here would be
+building Stage 4 inside Stage 3. **Question 0l** puts the choice to her, with *wait for the
+handshake* recommended.
+
+**The status is not here either.** *"Derived, but a person can override it"*, with On hold as
+the case no date maths produces. The override half is clear; the derivation half never was —
+and it overlapped with health, which `0133` has now taken out of `job_status` entirely. What is
+left for status to be computed from is a smaller question than it was on 14 September, and
+worth asking again rather than guessing at.
+
+**Proof.** `behaviour.sql` gains step 49: the active process sits in the sub-stage the job is
+up to; assigning the first task names the person on the job; finishing it lets the name go,
+as an em dash rather than a stand-in; closing the last required process stamps the end date;
+and reopening work does not take the day back. Watched failing twice — with the `tasks` trigger
+dropped the job named nobody, and with the end date following the derivation both ways it was
+cleared.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
