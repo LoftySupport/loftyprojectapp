@@ -16,7 +16,38 @@ Unreleased: 282 changes since then —
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
-## 14 September — START HERE IF YOU ARE A NEW CHAT: the maintenance drawer, and the rethink coming after it
+## 15 September — START HERE: the architecture audit, and the process rethink it sets up
+
+Amber, 15 September: *"I want to walk away with a clear picture on what needs to stay, what
+needs updating and what needs to go and a staged plan to implement it."* The audit is
+[`docs/schema/architecture-audit-2026-09-15.md`](docs/schema/architecture-audit-2026-09-15.md),
+published with its diagrams at <https://claude.ai/artifact/LnuPZkB65SW8uKhxnaVjCP>. On branch
+`claude/app-schema-architecture-audit-v19mt9`. **No migration was written and nothing on the
+live project changed.**
+
+**The finding that sets everything else up:** three generations of "how a job moves" coexist
+(the `0029` pipeline tables, never written; the `job_stage` column and its triggers, the only
+thing that moves a job; the `0078` processes, which have no path to the stage, the team or a
+property). Completing a process run changes one column on its own row. The Construction
+schedule was loaded twice, as 107 date properties and 107 template tasks, and neither copy is
+linked to a process.
+
+**What the audit recommends, in one line each:** a `lifecycle_stages` table replacing
+`pipeline_stages` and six CHECKs; a `lifecycle_substages` table replacing the free-text
+`process_stage_group`; `process_steps` (kind: property, task, checklist, automation) replacing
+the two template lists; the job's stage, sub-stage, team and health derived from runs with a
+pin; an `automations` registry of the twelve things that already run without a person; then
+the dead tables dropped, one PR each. Six stages, in that order, in the audit.
+
+**Twelve decisions are queued at the top of [`docs/open-questions.md`](docs/open-questions.md)**
+and are being asked in the chat one at a time. Nothing in the plan is built until its decision
+is answered. Stage 0 (housekeeping: the 26 `FAIL` lines, the audit allowlist, the misused
+`property_def_automation` column, the undeployed email worker, the RLS-less backup table) can
+start on the two decisions that are its own.
+
+---
+
+## 14 September — the maintenance drawer, and the rethink coming after it
 
 Amber, 14 September, ending the session: *"An issue becomes a task … I am rethinking the
 process/properties/task alignment and how they work together but that is a new car. Get the

@@ -1,0 +1,280 @@
+# Schema and architecture audit, 15 September 2026
+
+**The readable version, with the two diagrams, is published at
+<https://claude.ai/artifact/LnuPZkB65SW8uKhxnaVjCP>. Show that one to people; edit this file.**
+Revision 1. Answers Amber gives in the chat are recorded in
+[`../open-questions.md`](../open-questions.md) and folded back here as dated revisions.
+
+Amber, 15 September: *"I want to walk away with a clear picture on what needs to stay, what
+needs updating and what needs to go and a staged plan to implement it."* This is that record.
+It was read against the live project (`gmekuqdjemrfuurxhuib`), the 124 migration files, the
+app at `main` commit `293c8ca`, both Supabase advisor reports and Amber's entity list of the
+same day. Every count is a live query; every quotation is pasted from its source.
+
+## The one-sentence version
+
+Every table was built carefully, and the tables do not agree with each other about how a job
+moves. Three generations of that answer coexist in the schema, and the newest one,
+`processes`, cannot move anything: completing a run changes one column on its own row.
+
+## Where this stands, in numbers
+
+| | |
+| --- | --- |
+| Tables in `public` | 75, plus 21 views and about 110 functions |
+| Tables with no rows | 26, of which 8 are read by nothing in the app |
+| Projects, jobs | 119, 83. All 83 jobs are in Pre-construction; 67 have no title type |
+| Processes | 51. Three carry an SLA. Eleven runs across five records |
+| Property definitions | 266. Thirty-two values recorded, on 8 of them |
+| Tasks | 1 (*Check this out*, on 1002-001). No task dependencies, no checklist items |
+| Maintenance | 16 requests, 0 items. Four email notifications never sent |
+| Migrations | 124 files; `0073`, `0119` and `0120` each used twice; 142 unindexed foreign keys |
+
+The write counters in `pg_stat_user_tables` have been reset at some point (they show three
+inserts on the 51-row `processes` table), so they are not used as evidence here. Row counts
+and code references are.
+
+## How a job moves today
+
+Three mechanisms answer "where is 1002-002 in the build":
+
+1. **`0029`, the nested pipelines (August):** `pipelines` (1 row), `pipeline_stages` (7),
+   `job_pipeline_positions` (0), `job_stage_events` (0). Never written. The SLA typed into
+   Setup → Automations lands on `pipeline_stages` and reaches only the Gantt bar.
+2. **`0035` to `0046`, the `job_stage` column and its triggers:** a manager presses Move
+   stage; `guard_job_stage_change` (manager+), `guard_lifecycle_is_linear` (forward only),
+   `refresh_project_stage` (project follows its slowest job), `projects_cascade_stage_to_jobs`,
+   `lifecycle_archive` (cron 03:17, twelve months to Closed). **The only path that moves it.**
+3. **`0078`, processes (September):** `processes` (51), `process_runs` (11),
+   `process_run_display` (health). `process_properties` (140) to `property_values` (32);
+   `process_tasks` (107) to `tasks` (1), and only when somebody presses Add checklist.
+   **No path to the stage, the team or a property.**
+
+The SLA is fragmented the same way: three "expected days" columns of identical shape on
+`pipeline_stages`, `processes` and `tasks`, edited on two Setup tabs, feeding two health
+formulas and one Gantt bar, and none of them feeding the job's health pill, which reads a
+typed `job_status`.
+
+## Findings, most consequential first
+
+1. **Three generations of "how a job moves" coexist, and the process layer has no path.**
+   `0078`'s own header (lines 44 to 51) records that it was meant to delete the pipeline tables
+   and did not. Ketan completes every Pre-construction process on 1002-002 and the board still
+   shows Pre-construction, the owning team is still what was typed at creation, and nothing
+   tells Design the job is theirs. Stages 1 and 3.
+2. **The seven stage words live in six places:** CHECKs on `jobs`, `projects`, `processes` and
+   `property_defs`; `lifecycle_position()`; the `pipeline_stages` rows; `STAGE_NAMES` in
+   `types.ts`. The repository prose still says *"the first of the five lifecycle phases"*.
+   Stage 1.
+3. **The Construction schedule was loaded twice and connected to nothing.** 107
+   `property_defs` at Construction, all dates with SLA days, labelled *External Cladding BRICK
+   CLEAN* (`0090`); 107 `process_tasks` named *BRICK CLEAN* with expected days (`0079`). None
+   of the 107 definitions is in `process_properties`. The seven Construction processes collect
+   zero properties; the 38 Pre-construction processes carry zero tasks. In Construction a
+   process is a task list; in Pre-construction it is a property list. Stage 2, decision 5.
+4. **A sub-stage is free text and means something different in each stage.**
+   `process_stage_group`: Pre-construction has three groups over 38 processes; Construction
+   has eight groups for eight processes; Cancelled two of one; Maintenance none. Two orphaned
+   checkboxes, *Stage 1 Complete* and *Stage 2 Complete*, are the sub-stage gate nobody
+   collects. Nothing can say "1002-002 is in Frame". Stage 1.
+5. **Completing a process changes nothing but its own row.** It sets no property (`0078:20`,
+   *"PROCESSES NEVER STORE DATA. PROPERTIES DO."*), moves no stage (`0078:41`, *"no
+   auto-advance of the lifecycle (agreed 24 August)"*), changes no team, creates no tasks
+   unless Add checklist is pressed, does not refuse when required properties are missing
+   (a chip reads *"2 required missing"*; 6 of 140 links are required at all), notifies only
+   if `process_key LIKE 'working_drawings%'`, and writes no audit row (`process_runs` is not
+   in the allowlist). Stages 2 and 3.
+6. **Twelve things change data without a person, and the Automations tab says "Not built
+   yet".** The project-follows-slowest-job trigger, the cascade, the twelve-month archive,
+   `notify_scan` (every 15 minutes), `maintenance_scan` (every 15 minutes, over an empty
+   table), four notify triggers, the working-drawings prefix, the address move, the job-number
+   resync, the forecast, the property push. None has a name in the app, an on/off, or a log.
+   `processes.process_automation` is null on all 51 rows and read by nothing;
+   `property_defs.property_def_automation` holds a block name on 139 rows and is rendered under
+   the label *Automation*. Stage 4.
+7. **Four email notifications have waited since 12 September because the worker is not
+   deployed.** The repo holds four edge functions; the live project has one, `report-share`.
+   `notification_deliveries`: 4 in-app sent, 3 email held, 1 email queued. Eight of fifteen
+   notification types default to email. Stage 0, decision 8.
+8. **Twenty-six tables hold no rows; eight are read by nothing.** Dead: `job_pipeline_positions`,
+   `job_stage_events`, `activity_events`, `tags`, `taggings`, `variations`,
+   `variation_reopened_tasks`, `maintenance_message_secrets`; plus `import_staging_jobs` (801
+   rows, inert). Built ahead of use and correctly empty: the contacts and parties tables, the
+   checklists, `property_options`, `record_watchers`, `comment_mentions`,
+   `feedback_attachments`, `releases`, `release_entries`, `dictionary_overrides`, the four
+   maintenance offer tables. Eight views have no reader: `profile_display`,
+   `job_address_search`, `project_address_search`, `tasks_ready`, `job_variation_summary`,
+   `variation_rework`, `documents_current`, `job_timeline`. Stage 5.
+9. **Maintenance was built as a contractor-offer workflow that "an issue becomes a task" makes
+   redundant.** `maintenance_items`, `maintenance_assignments`, `maintenance_categories`,
+   `maintenance_message_secrets`, `offer_maintenance_item()`, `answer_maintenance_offer()`, the
+   `maintenance-accept` function, the `maintenance_scan` cron and two notification types. All
+   four tables are empty; the guard still refuses to close a request while an item is open.
+   Stage 5, decision 6.
+10. **The seam and the documents carry parallel truths.** `dictionary.ts` (1,968 lines) is
+    hand-written per column and is load-bearing for `orphanProperties.ts` and
+    `auditNarrative.ts`; `dictionary_overrides` has never had a row. The Wiring page's list
+    names 181 methods and omits `listTasks` (implemented since `0102`), so it reports the
+    Tasks board as not wired. `releases` duplicates the trailer-generated changelog. Three
+    migration numbers are used twice. `verify/constraints.sql` reports 26 `FAIL` lines on
+    `main`. Two icon modules, one export and one script are dead. Stages 0 and 5.
+11. **Advisors.** Critical: `private.profiles_backup_pre_batch3`, a 16 August copy of
+    `profiles` with RLS off (not API-reachable, still a copy of every person's row). By design:
+    `maintenance_message_secrets` no policy; four `SECURITY DEFINER` helpers callable by
+    `authenticated`; leaked-password protection off (Amber, 10 September: *"Not yet"*).
+    Performance: 142 unindexed foreign keys, 132 unused indexes, 39 tables with overlapping
+    permissive policies, `login_activity` re-evaluating `auth.uid()` per row. Stage 0.
+
+## Amber's rules against the schema
+
+Holds: one primary team per person (`profile_team_is_primary`); a job has exactly one project;
+tasks have exactly one parent (`tasks_one_parent`); files attach to many records
+(`document_links`); one lifecycle stage per record, forward only; maintenance is not gated by
+stage; checklists tick without touching a property; the activity trail is append-only.
+
+Conflicts: *an address has one and only one project* (address rows are shared places and move
+between records; the `0078` probe gives a job and its project the same row); *a task belongs to
+one or many processes* (`tasks.process_run_id` is one run, and should stay one); *a process has
+one or many tasks* (38 of 51 have none, rightly); *a process has one or many properties* (the
+seven Construction ones have none).
+
+Not modelled: sub-stage; automation; team-level permission (teams are ownership and routing; the
+only team-scoped right is `property_access.team_id`); health above the run; notifications to a
+contact or company.
+
+Push back: a sub-stage should own processes only. Tasks, properties, checklists and automations
+reach it through their process, or the same fact is filed twice. A variation, as Amber defines it
+(*"return to a previously completed task or process and repeat it"*), is `process_run_attempt`,
+not the `variations` table.
+
+## The recommended model
+
+Four layers of definition, four of instance, every instance arrow pointing up:
+
+| Definition (Setup, managers edit) | Instance (the job reads, never types) |
+| --- | --- |
+| `lifecycle_stages`: the seven as rows, position, SLA. Replaces `pipeline_stages` and six CHECKs | `job.stage`: the stage of the current sub-stage, never backwards, a pin overrides it (On hold, an imported job) |
+| `lifecycle_substages`: stage, name, position, gates the stage. Replaces `process_stage_group` | `job.substage`: the earliest sub-stage with a required process not complete or not applicable |
+| `processes`: sub-stage, owning team, optional, SLA, milestone, external, dependencies | `process_runs`: complete only when required steps are done; health from SLA; owning team is the earliest unfinished process's team |
+| `process_steps`: ordered, required, one of four kinds: property, task, checklist, automation. Folds `process_properties`, `process_tasks`, `process_task_dependencies` and the template checklist | property → `property_values` (set means done) · task → `tasks` (created when the run starts) · checklist → `task_checklist_items` · automation → `automation_runs` |
+
+Four words changed in Amber's definition, with the reasons:
+
+- **"update properties"**: the property stays the record and the step becomes the act of
+  recording it. A property step is done when its value is set. Same outcome, one source.
+- **"a group of tasks"**: a process is an ordered list of steps of any kind. *Planning
+  Approval* is two dates and a wait on council and must not be given an invented task.
+- **"move a job through the sub-stages and stages"**: yes, derived with a pin. This reverses
+  24 August's *"no auto-advance"*; the risk that rule named (an amendment dragging the job
+  back and forth) is answered by attempts: the derivation reads the latest attempt and never
+  moves a stage backwards.
+- **"a sub-stage groups several processes"**: agreed, and only processes.
+
+Worked on 1002-002: today its stage and owning team are typed at creation and its one run,
+*Contract Signing*, has no SLA. Under the model the same rows read sub-stage *Stage 1*, stage
+Pre-construction (derived, agrees), owning team Sales Admin (the team on *Contract Signing*),
+health still *no expectation* until somebody fills in the days. No data changes; three typed
+columns become three answers the database can defend.
+
+Three choices inside the model, with recommendations: **A, steps**: one `process_steps` table
+(recommended) over two tables plus an interleaving view, over leaving them. **B, automations**:
+a registry of what already runs, then step-kind automations with a fixed effect list (set a
+property, create the tasks, notify, request a folder, request a team override); not a rule
+builder. **C, Construction**: seven sub-stages, one process each (recommended), over one
+sub-stage *Build*, over inventing claim-stage groupings.
+
+## Stay, update, go
+
+The full catalogue is on the published page. By verdict:
+
+- **Stay:** `process_dependencies`, `process_runs`, the property store and its locks,
+  `tasks` and the Tasks board, the request-and-note half of maintenance, contacts and parties,
+  documents and the report builder, feedback and roadmap, `activity_audit`, `login_activity`,
+  the stage guards and cascades, `stubRepository.ts`, the history and archive documents.
+- **Update:** `jobs.job_stage` and `projects.project_stage` (FK, then derived with a pin);
+  `pipeline_stages` (becomes `lifecycle_stages`); `processes` (sub-stage, optional; loses the
+  group text and `process_automation`); the four process template tables (fold into steps);
+  `instantiate_process_tasks` (on start); `stage_completion`; `ProcessesPanel` +
+  `ProcessSteps` (one live card); `ProcessesSetupPage` and the pipeline helpers; `property_defs`
+  (scope, the misused automation column, the 107 Construction dates); `orphanProperties.ts`;
+  `MoveStageDialog` (becomes the pin); `dictionary.ts` (pruned); `verify/constraints.sql`;
+  `check-migrations.mjs`.
+- **Go:** `pipelines`, `job_pipeline_positions`, `job_stage_events` and their three functions;
+  `activity_events`; `tasks_ready`, `documents_current`, `job_timeline`, `profile_display`,
+  `job_address_search`, `project_address_search`; `tags`, `taggings`; the dead icon modules,
+  export and script; `private.profiles_backup_pre_batch3`. On decision: the maintenance offer
+  machinery; the four variation objects and five functions; `releases`, `release_entries`;
+  `dictionary_overrides`; the Wiring page and `WIRED` list.
+- **Archive (decision):** `import_staging_jobs` and the import functions into an `archive`
+  schema; the generators stay in `app/supabase/import/`.
+- **Decide:** `maintenance_categories` (a trades lookup, or gone), `receive_maintenance_email`
+  and `maintenance-inbound` (deploy or remove), `deliver-notifications` (deploy or drop the
+  email channel).
+
+## The staged plan
+
+One table per PR throughout. Sizes: small is a session, medium a few, large a week of sessions.
+
+**Stage 0, housekeeping (small, now).** Fix the 26 `FAIL` lines; refuse a fourth duplicated
+migration number; add `process_runs` to the audit allowlist; rename or clear
+`property_def_automation`; decide the email worker; drop the profiles backup; index the hot
+foreign keys; fix the `login_activity` policy; delete the dead code; correct *"five phases"*.
+Needs: the backup drop, the email decision.
+
+**Stage 1, one lifecycle and real sub-stages (medium, two migrations).** `lifecycle_stages`
+from `pipeline_stages`; `lifecycle_substages` backfilled from `process_stage_group`;
+`processes.substage_id` not null and `process_is_optional`; CHECKs become FKs; Setup → Processes
+gets sub-stages as objects; the board groups by sub-stage. Needs: decision 1, and names for the
+Maintenance and Acquisition & Development sub-stages.
+
+**Stage 2, steps (medium to large).** `process_steps` backfilled from the three template tables;
+a completion gate (required steps done, *not applicable* as the honest way past); tasks created
+on run start; the record's Process card goes live as the mockup drew it; finding 3 resolved per
+decision 5; the orphan rule becomes "no step collects it". Needs: choice A, decision 5, and
+whether the gate is the database's (recommended) or the screen's.
+
+**Stage 3, derivations (medium).** Sub-stage and stage derived with `job_stage_pinned_at`;
+owning team, assignee, status and end date derived (Amber's 14 September rules); health rolls up
+process → sub-stage → stage → job; the confirm modal becomes the pin. Needs: decision 3 and
+question 8.
+
+**Stage 4, automations you can see (medium).** `automations` and `automation_runs`; the twelve
+existing mechanisms registered and gated by `is_active`; Setup → Automations lists them; step
+automations get their effect vocabulary; the working-drawings prefix becomes a registry row; the
+Override Active Team handshake is the first user-facing one. Needs: choice B.
+
+**Stage 5, remove and archive (small each, last).** Drop the dead objects; drop or archive the
+decided ones; prune `dictionary.ts` and regenerate; `verify/seeds.sh` proves the stub against
+`lifecycle_stages`. Needs: one yes per item.
+
+## Decisions the plan turns on
+
+Asked in the chat one at a time and recorded in `open-questions.md`. Numbered as on the page:
+
+1. Construction's sub-stages (recommend seven, one process each).
+2. Fold properties and tasks into one steps list (recommend yes, choice A).
+3. Processes move the job, derived with a pin, reversing 24 August (recommend yes).
+4. What "automation" means in the app (recommend registry, then step effects).
+5. The 107 Construction date properties: retire, or become the steps (recommend retire).
+6. Remove the maintenance offer machinery (recommend yes).
+7. Variations: the table, or an attempt of the *Variation* process (recommend the attempt).
+8. Email worker: deploy, or drop the channel until a mailbox exists (recommend drop).
+9. Import staging into an `archive` schema (recommend yes).
+10. Drop the August profiles backup (recommend yes).
+11. Remove the Wiring page, dictionary overrides, releases and tags (recommend yes to all).
+12. Trades: does `maintenance_categories` become a real lookup (recommend not yet).
+
+## How this was checked
+
+Live queries against `gmekuqdjemrfuurxhuib`: row counts for every table, the migration ledger,
+every view, function and trigger, the process seed with per-process counts, property definitions
+by scope and stage with orphan and value counts, the Construction definitions against the
+template task names, notification types and rules, the delivery outbox, the `cron.job` rows,
+the `pipeline_stages` rows, the eleven runs, the stage trigger and maintenance guard bodies, the
+deployed edge functions, both advisor reports. In the repository: `0077` and `0078` in full; the
+Setup, ProcessesPanel, ProcessSteps and ProcessesSetupPage sources; every `.from()` and `.rpc()`
+against every `create table` and `create view`; the `WIRED` list against the implemented methods;
+`HANDOFF.md`, `open-questions.md`, `schema-plan.md`, the job-record handoff.
+
+Not done: no migration was written and nothing on the live project was changed. `check.sh` was
+not run here; its 26 failures are `HANDOFF.md`'s report of 14 September.

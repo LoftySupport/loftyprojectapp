@@ -21,6 +21,32 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
+### 0g. The twelve decisions the architecture audit turns on
+
+**From [`schema/architecture-audit-2026-09-15.md`](schema/architecture-audit-2026-09-15.md)
+(published at <https://claude.ai/artifact/LnuPZkB65SW8uKhxnaVjCP>).** Asked in the chat one
+at a time, in this order, and moved to *Answered* as they land. Each carries a recommendation;
+none is built ahead of its answer.
+
+| # | Decision | What turns on it | Recommendation |
+| --- | --- | --- | --- |
+| 1 | Construction's sub-stages | Stage 1's backfill; whether "in Frame" is a thing the app can say | Seven, Footings to Handover, one process each |
+| 2 | Fold `process_properties` and `process_tasks` into one ordered `process_steps` list | Stage 2's shape; whether an automation step has a home | Yes |
+| 3 | Processes move the job: stage and sub-stage derived from runs with a pin, reversing 24 August's *"no auto-advance"* | Stage 3 exists or does not | Yes; 14 September already said *"Derived from processes like the tram"* |
+| 4 | What "automation" means in the app | Stage 4's size | A registry of what already runs, then step effects; no rule builder |
+| 5 | The 107 Construction date properties: retire, or become the steps | Finding 3 | Retire; their SLA days move onto the task steps |
+| 6 | Remove the maintenance offer machinery (items, assignments, categories, secrets, offer functions, the scan, two notification types) | Finding 9 | Yes |
+| 7 | Variations: the `variations` table, or an attempt of the *Variation* process | Four objects, five functions | The attempt; cost and approval become steps |
+| 8 | Email worker: deploy `deliver-notifications`, or drop `email` from the default channels | Four emails held since 12 September | Drop the channel until a mailbox exists |
+| 9 | `import_staging_jobs` and the import functions into an `archive` schema | 801 rows off the API surface | Yes |
+| 10 | Drop `private.profiles_backup_pre_batch3` | The one critical advisor line | Yes |
+| 11 | Remove the Wiring page, `dictionary_overrides`, `releases`/`release_entries`, `tags`/`taggings` | Four pieces of scaffolding | Yes to all |
+| 12 | Trades: does `maintenance_categories` become a real lookup (see 0d) | The repairer picker | Not until Lofty's company data shows the distinction |
+
+**Blocked on:** decision 1 blocks Stage 1's Construction half; 2 blocks Stage 2; 3 blocks
+Stage 3; 4 blocks Stage 4. Stage 0 needs only 8 and 10.
+
+
 ### 0f. When a job number changes, should the old one stay findable?
 
 `0120` made the job number move: mark a job community title and `1004-003` becomes
