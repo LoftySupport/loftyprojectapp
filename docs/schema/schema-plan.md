@@ -4578,6 +4578,48 @@ it; `0129`'s state view picked up the rename on its own because a view body is a
 rather than text; `ALL_METHODS`, `METHOD_TABLES` and `WIRED` agree with what is implemented;
 no component imports the Supabase client; and the data dictionary regenerates byte-identical.
 
+### 15 September — a milestone process is never optional (`0138`)
+
+Amber, 15 September: *"Some entire processes need to be marked as optional and they can be
+skipped. A milestone process can never be optional."*
+
+Both flags already existed and neither said anything about the other. `process_is_milestone` is
+`0078`'s and its comment says what a milestone is for: *"A count of these is the only progress
+figure this app reports — never a percentage."* `process_is_optional` is `0127`'s, added for
+Stage 2's completion gate and read by Stage 3's derivation, which looks only at non-optional
+processes when it asks what a job is up to.
+
+**Why the two cannot both be true, in one sentence:** a count is only honest if the denominator
+is fixed, and an optional milestone makes *"4 of 7 milestones passed"* a figure measured against
+a different 7 on every job. Read the other way it is the same rule — skipping is what optional
+means, and a milestone is the thing a stage is measured by.
+
+**A CHECK rather than a trigger**, because it is a two-column rule on one row: it cannot be
+bypassed, needs no function, and holds for an import or a hand-written UPDATE as well as for the
+screen. What a CHECK cannot do is explain itself, so Setup → Processes does that instead: the
+Optional box on a milestone process is disabled and its hint says *"a milestone cannot be
+skipped: untick Milestone first if this process really is optional"*, and the Milestone box on
+an optional one says why it is closed. The database is the rule; the screen is the sentence.
+
+**What it deliberately does not do.** It marks nothing optional. Which processes those are is
+Amber's to say one at a time in Setup, and a list invented here would be exactly the plausible
+value this file keeps warning about. It also does not change what *skipped* means at run time:
+an optional process is already left out of Stage 3's sub-stage derivation, and a run can already
+be marked not applicable (`0078`). Neither is touched.
+
+**Watched failing:**
+
+| Broken | Reported |
+| --- | --- |
+| The constraint not added | `0138 proof: the constraint is not there` |
+| The constraint added as `check (true)` | `0138 proof: a milestone process was made optional` |
+| Two processes planted as both | `0138: these processes are marked both optional and a milestone … : attached_lightweight_verandah_engineering, beam_design` |
+| The constraint dropped, with the harness probe alone | `FAIL: a milestone process was made optional (0138)` and `FAIL: an optional process was made a milestone (0138)` |
+
+**Both directions are probed, in the migration and in `constraints.sql`**, because there are two
+ways into the pair and a rule tested one way is a rule somebody can walk around. Each probe puts
+the flags back as it found them, which is the lesson `0130` taught the same evening.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

@@ -16,6 +16,30 @@ Unreleased: 290 changes since then —
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
+## 15 September, night — two answers from Amber, one of them a reversal
+
+**A whole process can be optional, and a milestone never can** (`0138`, on
+`claude/a-milestone-process-is-never-optional`). Her words: *"Some entire processes need to be
+marked as optional and they can be skipped. A milestone process can never be optional."* Both
+flags existed already; `0138` makes the pair a CHECK, refused both ways in, and Setup →
+Processes disables whichever box would break it and says why. **Nothing is marked optional** —
+which processes those are is hers to say, one at a time.
+
+**Every task in a process is required again, and question 0j is answered twice.** She first
+answered *optional unless ticked required*, and `0136` was written to it; an hour later: *"At
+present tick all required and I will review and untick any that are optional."* So `0128`'s
+value stands, nothing changes on any database, and #111 is closed unmerged. Both answers are in
+`docs/open-questions.md` with their dates, because the first one is the reason the second needs
+no migration.
+
+**What the reversal saved, worth keeping in mind before the next change to that flag:** with
+tasks optional, the seven Construction processes would have had nothing required, and `0130`'s
+rule that a run completes itself when its last required step closes would have stopped firing
+for exactly the processes Amber's step 9 describes. `0136` had rewritten that rule to read every
+step instead — which then made *optional* mean nothing for auto-completion, since an unticked
+step would still have held the run open. The required-based rule is the one that matches
+*optional means skippable*.
+
 ## 15 September — START HERE: the architecture audit, and the process rethink it sets up
 
 Amber, 15 September: *"I want to walk away with a clear picture on what needs to stay, what

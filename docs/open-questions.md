@@ -21,41 +21,6 @@ invent a value, and `CLAUDE.md` is explicit that an invented default is worse th
 
 ## Open — next question first
 
-### 0j. Is every task inside a process required to finish it?
-
-**Stage 2 needs a value that has never existed.** `process_steps` (`0128`) gives every step a
-`required` flag, because the completion gate reads it: a run cannot be marked complete while a
-required step is open. Property steps brought their flag with them — 6 of the 140 rows on the
-live database are marked required, which is what the drawer's *"2 required missing"* chip counts.
-**Template tasks never had one.**
-
-The backfill set task steps to **required**, and that is a reading rather than a copy. It follows
-from your own step 9 of the Working Drawings walk-through: *"Automation/Rule fires that when all
-process steps are completed mark this process complete"*. If every task were optional, nothing
-would hold a process open and the gate would be decoration.
-
-| Option | What it means on the day Construction runs |
-| --- | --- |
-| **Every task is required** (what is built) | *Footings* cannot be marked complete until all 15 of its lines are done or marked not applicable. The gate is real, and a line that does not apply to this house is a recorded decision rather than a silence |
-| Tasks are optional unless ticked required | *Footings* can be completed with lines outstanding, and the ones that matter have to be marked by hand, one by one, on 107 lines |
-| Required only where the schedule has a claim | A third rule nobody has written down yet, and the workbook does not say which lines are claims |
-
-**Recommendation: leave it as built.** *Not applicable* on a step is the honest way past a line
-that does not apply, and it is a fact the record keeps — which is what `0078` already says about a
-run: *"complete with a gap is sometimes the truth"*, recorded rather than assumed.
-
-**The same value was written for checklist lines**, for the same reason and with less evidence:
-no checklist line exists on any database, so nothing was copied and nothing was contradicted. If
-tasks turn out to be optional, checklist lines almost certainly are too, and the answer to this
-question sets both. One thing to know when you answer: a checklist line holds its run open on its
-own, **including a line under a task step somebody has marked not applicable** — the state view
-reads each step by itself and does not look at its parent. That is a sharp edge worth knowing
-about before the first checklist exists, and it is cheap to change while none does.
-
-**Blocked on this:** nothing today. Construction runs in SiteBook and no run exists. It is one
-UPDATE while that stays true, and a conversation with the site team once it does not.
-
-
 ### 0g. Do `0120` and `0122` get applied to the live project, and in that order? *(answered 15 September: yes, and both are applied; see the update at the end and the Answered row)*
 
 **Verified against the live project on 15 September, not assumed:** neither of #88's two
@@ -561,6 +526,8 @@ decides how much retro-fitting to schedule, and in what order.
 
 | Date | Question | Answer |
 | --- | --- | --- |
+| 15 Sep | Can a whole process be optional, and can a milestone be one? | **Yes to the first, never to the second.** Amber: *"Some entire processes need to be marked as optional and they can be skipped. A milestone process can never be optional."* `process_is_optional` already existed (`0127`) and `process_is_milestone` since `0078`; neither said anything about the other until `0138` made the pair a CHECK, refused both ways in. **The reason it is a rule rather than a convention:** a milestone is what the app counts, and `0078` says a count is the only progress figure this app reports, never a percentage. An optional milestone makes the total depend on what each job skipped, so two jobs in the same stage report against different denominators and neither number means what it says. **Which processes become optional is Amber's to say**, one at a time in Setup; none is marked optional today and inventing a list would be the plausible value this repository keeps warning about |
+| 15 Sep | Stage 2, question 0j: is every task inside a process required to finish it? | **Every task is required, and Amber unticks the ones that are not.** Her words: *"At present tick all required and I will review and untick any that are optional."* So `0128`'s value stands and nothing changes: task steps are required, checklist lines are required, and the 140 property steps keep the flags `process_properties` held, 6 ticked and 134 not. **This reverses her own earlier answer the same evening** (*optional unless ticked required*), and both are kept here because a decision without its history gets re-made: `0136` was written to the first answer, and closed unmerged as #111 when the second arrived. Nothing reached a database either way. **A follow-up settled what "all" covers:** tasks and tick boxes, not property steps. Ticking the 134 optional property steps required would block all 11 in-progress runs from completing until somebody filled the values in, which is the failure the #108 review caught once already at the call site. **And what the reversal saved:** the first answer would have left the seven Construction processes with nothing required, so `0130`'s rule that a run completes itself when its last required step closes would have stopped firing for exactly the processes her step 9 describes |
 | 15 Sep | Stage 1 of the audit: are the process stage groups the data already holds the **sub-stages**, stage by stage? | **"Yes, as the data reads."** Chosen over *rename some of them first* and *Construction's seven are not sub-stages*. So `0127` seeds seventeen rows from the groups themselves: Project Creation and Job Creation; Stage 1, 2 and 3; Footings, Frame, External Cladding, Roof Cover, 2nd Fix, Practical Completion and Handover; 1 Month, 2 Month and 3 Month (her answer of the same day, since Maintenance's one process carried no group); PWA Cancellation and Contract Cancellation. Completed and Closed have none. Two things the yes does **not** cover, both recorded rather than assumed: *Variation* is not a sub-stage under decision 7, so its one process is parked (retired, no sub-stage, never run) until variations are records of their own; and Construction's seven stay the SiteBook placeholder her decision-1 answer describes, carried across mechanically and regrouped by nobody. A correction went with it: `0124`'s header had Roof Cover before External Cladding, and the workbook's process order is the other way round |
 | 15 Sep | The last Stage 0 item: delete `theme/houseIcons.tsx`, `theme/loftyIcons.tsx` and the `NotWired` export, all imported by nothing? (Amber's rule: ask before deleting a file.) | **"Delete all three."** Chosen over *delete the icon modules, keep NotWired* and *keep everything for now*. One correction went with the question: `scripts/build-logo.mjs`, which the audit had counted as dead, generates `src/data/export/logo.ts` for the PDF and Word exports and was only missing from `package.json`; it is wired as `build:logo` rather than deleted. Git keeps the icons |
 | 15 Sep | What is the Maintenance stage's sub-stage called? (Stage 1 of the audit's plan needs a row for it) | **Three sub-stages: 1 Month, 2 Month and 3 Month.** Amber: *"1 month, 2 Month and 3 Month"*, chosen over *Warranty*, *Maintenance* and *Checkins and Issues*. So the backfill puts the existing *1 Month Checkin* process (the only one with an SLA, 30 days with a 25-day lead) in *1 Month*, and *2 Month* and *3 Month* start with no processes until she defines them; the maintenance-issue process from decision 6 runs on an issue, not on a sub-stage, and can occur in any of the three. The `maintenance_request_identified_at` vocabulary already ends *1 Month Inspection, 2 Month Inspection, 3 Month Inspection*, so the words match. The other stages' sub-stages come straight from their groups: Project Creation and Job Creation; Stage 1, 2 and 3; the seven Construction names; PWA Cancellation and Contract Cancellation |
