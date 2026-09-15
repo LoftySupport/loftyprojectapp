@@ -1124,3 +1124,72 @@ rollback;
 
 delete from report_documents where report_document_title like '__behaviour__%';
 delete from report_templates where report_template_name like '__behaviour__%';
+
+\echo '--- 46. a run makes its tasks once when it starts, each naming its step, and closes itself when the last required step is answered (0128-0130)'
+-- Stage 2, end to end, on the fixture job. What this proves that the constraint probes cannot:
+-- the run machinery is a SEQUENCE — start makes the tasks, finishing them closes the run — and
+-- a sequence only shows up when it is walked.
+begin;
+
+-- A Construction process: task steps, so there is something to instantiate.
+select process_id as task_process from processes p
+ where p.process_scope = 'job'
+   and exists (select 1 from process_steps s where s.process_id = p.process_id and s.process_step_kind = 'task')
+ order by p.process_key limit 1 \gset
+
+insert into process_runs (process_id, job_id, process_run_status)
+values (:'task_process', '9106-002', 'in_progress');
+
+select process_run_id as task_run from process_runs
+ where process_id = :'task_process' and job_id = '9106-002' order by process_run_created_at desc limit 1 \gset
+
+select case
+  when count(*) = (select count(*) from process_steps
+                    where process_id = :'task_process' and process_step_kind = 'task')
+   and count(*) = count(process_task_id)
+  then 'ok  starting a run made ' || count(*) || ' tasks, each naming the step it came from'
+  else 'FAIL: ' || count(*) || ' tasks for ' ||
+       (select count(*) from process_steps where process_id = :'task_process' and process_step_kind = 'task') ||
+       ' task steps, ' || count(process_task_id) || ' naming a step' end
+from tasks where process_run_id = :'task_run';
+
+select case when instantiate_process_steps(:'task_run') = 0
+  then 'ok  a run that already has its tasks makes no more'
+  else 'FAIL: a second instantiation made more tasks' end;
+
+-- Now the forward rule, on a process whose only required step is one property step.
+select s.process_id as prop_process, s.process_step_id as prop_step
+  from process_steps s join processes p using (process_id)
+ where s.process_step_kind = 'property' and p.process_scope = 'job'
+ order by p.process_key, s.process_step_position limit 1 \gset
+
+update process_steps set process_step_is_required = (process_step_id = :'prop_step')
+ where process_id = :'prop_process';
+
+insert into process_runs (process_id, job_id, process_run_status)
+values (:'prop_process', '9106-002', 'in_progress');
+select process_run_id as prop_run from process_runs
+ where process_id = :'prop_process' and job_id = '9106-002' order by process_run_created_at desc limit 1 \gset
+
+select case when process_run_status = 'in_progress'
+  then 'ok  a run with an open required step stays open'
+  else 'FAIL: it closed itself as ' || process_run_status end
+from process_runs where process_run_id = :'prop_run';
+
+insert into process_run_step_exemptions (process_run_id, process_step_id, process_id,
+                                         process_run_step_exemption_reason)
+values (:'prop_run', :'prop_step', :'prop_process', 'behaviour: it does not apply here');
+
+select case when process_run_status = 'complete' and process_run_completed_at is not null
+  then 'ok  answering the last required step closed the run, and stamped it'
+  else 'FAIL: the run is ' || process_run_status end
+from process_runs where process_run_id = :'prop_run';
+
+-- And it does not reopen: clearing what answered it leaves the record of what happened.
+delete from process_run_step_exemptions where process_run_id = :'prop_run';
+select case when process_run_status = 'complete'
+  then 'ok  a completed run is not reopened by undoing what closed it'
+  else 'FAIL: the run fell back to ' || process_run_status end
+from process_runs where process_run_id = :'prop_run';
+
+rollback;

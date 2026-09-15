@@ -4384,6 +4384,46 @@ open required step was marked complete and the database said nothing. `constrain
 gate and the cross-process exemption, each with its own fixture so it does not depend on a run
 existing.
 
+### 15 September — a run makes its own tasks, and closes itself (`0130`)
+
+Stage 2 of the audit, its third migration, on `claude/stage2-process-steps`.
+
+**Amber's walk-through, as machinery.** Her steps 2 and 6 — *"A task is created by the system and
+assigned to Design Team manager"*, *"Tasks for Design Teams internal processes are created"* — and
+step 9, *"when all process steps are completed mark this process complete"*. What the app did
+instead: nothing at 2 and 6 until somebody found the **Add checklist** button inside a row's
+disclosure, and nothing at all at 9. Step 11, moving the job on, is Stage 3.
+
+**`instantiate_process_steps(run)`** makes a run's tasks from its process's task steps, with their
+checklist lines, nesting and dependencies, each carrying `process_step_id` so a tick can be
+matched back. It runs **on start** — a trigger, when a run first reaches a status that means work
+has begun — and is idempotent by construction: a run that already has tasks makes none and returns
+zero rather than raising, because the trigger calls it on every start.
+
+**`close_run_if_its_steps_are_done(run)`** is `0129`'s gate read forwards, called from the four
+places a step's state can change: a property value written, a task finished, a checklist line
+ticked, an exemption recorded.
+
+**Three refusals worth keeping.**
+
+- **It never reopens a run.** Clearing the value that closed it does not un-complete it. A
+  completed run is a record of what happened; a second pass is a second attempt (`0078`), which
+  is also what decision 7 says a variation makes. Closing is automatic, reopening has a name on it.
+- **A process with no required step does not close itself.** That would be a no-op with a
+  timestamp rather than a run. Those close by hand, and the gate lets them.
+- **It does not touch the job's stage.** Step 11 is Stage 3, and burying the audit's biggest
+  reversal inside a migration about tasks would be the wrong place to find it later.
+
+**The old function stays.** `instantiate_process_tasks` still reads `process_tasks` and still
+works, for the eleven runs that predate this and have no tasks. It goes with the table.
+
+**Proof.** Watched failing twice: with the start trigger dropped a run began with no tasks, which
+is the state the app has been in since `0079`; with the close trigger dropped, the last required
+step was answered and the run stayed in progress. `behaviour.sql` gains step 46, which walks the
+whole sequence on the fixture job — 16 tasks from 16 task steps, each naming its step, a second
+instantiation making none, the run staying open with a required step open, closing when it is
+answered, and not reopening when that answer is undone.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in
