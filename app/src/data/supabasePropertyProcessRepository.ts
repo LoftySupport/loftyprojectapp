@@ -599,9 +599,14 @@ export function propertyProcessMethods(client: SupabaseClient): PropertyProcessM
           .update({ process_step_position: i + 1 })
           .eq("process_step_id", stepIds[i]).eq("process_id", processId)
           .select("process_step_id");
-        if (error) throw error;
+        // n writes, not one transaction, so a failure part-way leaves the steps before it
+        // renumbered. The message says so rather than claiming nothing was saved: a person
+        // who reloads and finds the order half-changed has been told the wrong thing twice.
+        if (error) {
+          throw new Error(`${error.message} — ${i} of ${stepIds.length} steps had already been renumbered. Reload before trying again.`);
+        }
         if (!data?.length) {
-          throw new Error("The order was not saved — one of those steps no longer exists, or you do not have permission.");
+          throw new Error(`The order was only partly saved: ${i} of ${stepIds.length} steps moved before one of them turned out to be gone, or not yours to move. Reload before trying again.`);
         }
       }
       return this.listProcessSteps(processId);

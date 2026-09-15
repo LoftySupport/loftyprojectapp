@@ -8,6 +8,11 @@ Turn Amber's processes-and-properties workbook into the seed migration.
         writes the same rows as multi-row VALUES lists to PATH — a quarter of the size,
         for pasting into a console that will not take 255 KB. Same effect, same
         idempotence; the readable file in migrations/ stays the record.
+        NOTE, since 0131: the compact output still writes process_properties,
+        process_tasks and process_task_dependencies, which is correct for 0079 — it
+        runs before 0128 folded them into process_steps — but it CANNOT be pasted into
+        a console against the current database, where those three tables are gone.
+        Regenerating the migration is fine; pasting the compact file is not.
 
 WHY A SCRIPT, AND WHY ITS OUTPUT IS CHECKED IN
 ----------------------------------------------

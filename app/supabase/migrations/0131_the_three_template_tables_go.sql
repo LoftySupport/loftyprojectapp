@@ -116,7 +116,14 @@ begin
 end $$;
 
 alter table tasks drop constraint if exists tasks_process_task_id_fkey;
-alter table tasks rename column process_task_id to process_step_id;
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'tasks'
+                and column_name = 'process_task_id') then
+    alter table tasks rename column process_task_id to process_step_id;
+  end if;
+end $$;
 alter index if exists tasks_process_task_idx rename to tasks_process_step_idx;
 alter table tasks
   add constraint tasks_process_step_id_fkey
@@ -128,11 +135,32 @@ comment on column tasks.process_step_id is
 -- The view carried the old name through to the API, so it is renamed too rather than
 -- rebuilt: a base-column rename follows into the view's body on its own, but not into the
 -- name the view publishes.
-alter view task_display rename column process_task_id to process_step_id;
+do $$
+begin
+  if exists (select 1 from information_schema.columns
+              where table_schema = 'public' and table_name = 'task_display'
+                and column_name = 'process_task_id') then
+    alter view task_display rename column process_task_id to process_step_id;
+  end if;
+end $$;
 
 -- ============================================== the run machinery, on the new column name
+--
+-- SECURITY INVOKER, which 0130 got wrong and this corrects before either reaches the live
+-- project. `instantiate_process_tasks`, the function it replaces, was invoker from 0081;
+-- 0130 wrote `definer` and granted execute to `authenticated`, which made the RPC a way
+-- around RLS on `tasks`: a viewer who cannot insert one task could call it and insert
+-- sixteen. Watched: as a profile with `is_active_user()` false, a direct insert into
+-- `tasks` was refused by policy and the same session's call to this function wrote 16 rows.
+--
+-- Invoker is all it takes, because the two callers want different things and already have
+-- them. `make_tasks_when_a_run_starts` is SECURITY DEFINER, so the call inside it still
+-- runs as the owner and a run started by anyone still gets its tasks. A direct call over
+-- the API runs as whoever made it, which is the whole point — and the function's own error
+-- text, "no such process run, or you may not see it", becomes true rather than a lie a
+-- definer could not have told.
 create or replace function instantiate_process_steps(p_process_run_id uuid) returns integer
-language plpgsql security definer set search_path = public, pg_temp as $$
+language plpgsql security invoker set search_path = public, pg_temp as $$
 declare
   run     process_runs%rowtype;
   made    integer := 0;
@@ -197,6 +225,16 @@ comment on function instantiate_process_steps(uuid) is
   'Make a run''s tasks from its process''s task steps (0130), with their checklist lines, nesting and dependencies, each carrying the step it came from. Returns how many were made; a run that already has tasks makes none. Writes tasks.process_step_id since 0131.';
 
 -- ===================================================================== the tables go
+--
+-- Two comments first. A comment naming a table nobody has is the same lie as a column
+-- naming one, and these two are the reason this migration renamed a column rather than
+-- only repointing it — so they go in the same change rather than being left for the next
+-- person to find in the database and not in the dictionary.
+comment on table process_steps is
+  'What a process is made of (0128): one ordered list of steps per process, each of one kind — a property to record, a task to do, a checklist line to tick, an automation to fire. It folded the three template lists into one; 0131 dropped them. A task step kept the id its template task had, so every instantiated task still points at the right row. A run completes when its required steps are done (Stage 2''s gate).';
+comment on table task_checklist_items is
+  'Tick boxes under a task (0081): text, order, who ticked it when. Not a task — no assignee, due date, status or dependencies — so a task with twelve lines is one task, not thirteen. Made from the checklist steps under a task step when a run starts, each carrying the step it came from so the tick counts towards the run.';
+
 drop function if exists instantiate_process_tasks(uuid);
 
 drop table if exists process_task_checklist_items;
@@ -208,6 +246,62 @@ drop table if exists process_properties;
 -- foreign keys (parent) and its own recursive guard (dependency cycles).
 drop function if exists guard_process_task_parent();
 drop function if exists guard_process_task_dependency();
+
+-- =================================================== a step is at most two deep
+--
+-- `instantiate_process_steps` walks the task steps in one pass, top-level first and then
+-- everything with a parent, looking each parent up in a map it builds as it goes. That
+-- supports exactly TWO levels: a task, and the tasks and tick boxes under it. At three, a
+-- grandchild is looked up before its parent is in the map and lands with no parent at all
+-- — silently, on live jobs. Setup → Processes could reach that state in two clicks, by
+-- putting a task that already has tick boxes under another task, and the tick boxes then
+-- rendered nowhere while instantiation went on copying them.
+--
+-- So the depth is the database's rule rather than the screen's, because the screen is not
+-- the only writer. Two directions, because there are two ways in: a step cannot be given a
+-- parent that has one, and a step that has children cannot be given a parent.
+create or replace function guard_process_step_depth()
+returns trigger
+language plpgsql set search_path = public, pg_temp
+as $$
+begin
+  if new.parent_process_step_id is null then
+    return new;
+  end if;
+  if exists (select 1 from process_steps p
+              where p.process_step_id = new.parent_process_step_id
+                and p.parent_process_step_id is not null) then
+    raise exception 'A step sits under a top-level step, not under one that is already nested. Move it under the parent instead.'
+      using errcode = '23514';
+  end if;
+  if exists (select 1 from process_steps c where c.parent_process_step_id = new.process_step_id) then
+    raise exception 'That step has steps of its own, so it cannot be nested under another. Move its children out first.'
+      using errcode = '23514';
+  end if;
+  return new;
+end $$;
+
+revoke execute on function guard_process_step_depth() from public, anon, authenticated;
+
+drop trigger if exists process_steps_guard_depth on process_steps;
+create trigger process_steps_guard_depth
+  before insert or update of parent_process_step_id on process_steps
+  for each row execute function guard_process_step_depth();
+
+-- Nothing live is three deep — there are no checklist steps at all on 15 September and the
+-- 107 task steps are two levels — but the trigger only sees new writes, so the existing
+-- rows are checked once here rather than assumed.
+do $$
+declare deep integer;
+begin
+  select count(*) into deep
+    from process_steps c
+    join process_steps p on p.process_step_id = c.parent_process_step_id
+   where p.parent_process_step_id is not null;
+  if deep > 0 then
+    raise exception '0131: % steps are already three levels deep, which instantiation cannot carry. They need flattening before this rule can hold.', deep;
+  end if;
+end $$;
 
 -- ========================================================================= the proof
 do $$
