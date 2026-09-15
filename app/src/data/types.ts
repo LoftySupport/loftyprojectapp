@@ -1325,8 +1325,8 @@ export interface Task {
   isExternal: boolean;
   /** The process run this was instantiated for (0078) — null for a typed-in task. */
   processRunId: Uuid | null;
-  /** The template line it was copied from, or null. */
-  processTaskId: Uuid | null;
+  /** The task step it was made from (0131), or null for a typed-in task. */
+  processStepId: Uuid | null;
   /** When work began (0081) — stamped on the first move off "to do", editable after. */
   startedAt: IsoDateTime | null;
   /** How long it should take from its start; null is "no agreed duration", not zero. */
@@ -1415,14 +1415,6 @@ export interface TaskChecklistItem {
   doneAt: IsoDateTime | null;
   doneBy: Uuid | null;
   doneByName: string | null;
-}
-
-/** One tick box on a template line, copied to every run's task (0081). */
-export interface ProcessTaskChecklistItem {
-  id: Uuid;
-  processTaskId: Uuid;
-  position: number;
-  text: string;
 }
 
 /** Stage completion as the database counts it (0081): counts, never a percentage. */
@@ -1862,7 +1854,7 @@ export const RECORDABLE_FORMATS = PROPERTY_FORMATS.filter(f => f !== "unknown") 
  * Every one lives at project or job level and carries two pieces of context: which
  * stage captures it, and which team captures it. Stage is deliberately not a third
  * level — a pour date is a property of a *job* that happens to be filled in during
- * Construction. Which *process* collects it is a `process_properties` row, because the
+ * Construction. Which *process* collects it is a property step, because the
  * same fact can be collected by more than one process.
  *
  * These are rows, not columns, which is why nothing in this app has `field_1`. The
@@ -2160,38 +2152,20 @@ export interface ProcessDependency {
   lagDays: number;
 }
 
-/** `process_properties` — a property this process collects, and whether it must be recorded to complete. */
+/**
+ * A property this process collects, and whether it must be recorded to complete.
+ *
+ * Derived from the process's PROPERTY STEPS since 0131 — `process_properties` is gone, and
+ * `useProcessProperties` reads `process_steps` and narrows to the property kind. The shape
+ * stays because four screens ask the same question of it; `position` is now the step's place
+ * in the whole list rather than 1..n over the properties alone.
+ */
 export interface ProcessProperty {
   processId: Uuid;
   propertyKey: string;
   position: number;
   required: boolean;
 }
-
-/** `process_tasks` — a template line of the checklist a run instantiates. */
-export interface ProcessTask {
-  id: Uuid;
-  processId: Uuid;
-  parentId: Uuid | null;
-  name: string;
-  owningTeam: TeamId | null;
-  expectedDays: number | null;
-  isExternal: boolean;
-  position: number;
-  importRef: number | null;
-}
-
-export interface NewProcessTask {
-  processId: Uuid;
-  name: string;
-  parentId?: Uuid | null;
-  owningTeam?: TeamId | null;
-  expectedDays?: number | null;
-  isExternal?: boolean;
-  position?: number;
-}
-
-export type ProcessTaskPatch = Partial<Omit<NewProcessTask, "processId">>;
 
 /**
  * `process_steps` — one step of a process, of one kind (0128).
@@ -2203,8 +2177,8 @@ export type ProcessTaskPatch = Partial<Omit<NewProcessTask, "processId">>;
  * SLA and possibly the property it stamps, `checklist` hangs off a task, `automation` carries
  * its note until Stage 4 gives it a vocabulary.
  *
- * A task step keeps the id its `process_tasks` row had, so a task instantiated from it still
- * points at the right template when that table goes.
+ * A task step kept the id its template task had, so a task instantiated from it still
+ * points at the right step now that table has gone (0131).
  */
 export interface ProcessStep {
   id: Uuid;
@@ -2274,13 +2248,6 @@ export interface ProcessStepDependency {
   processId: Uuid;
   stepId: Uuid;
   dependsOnStepId: Uuid;
-  lagDays: number;
-}
-
-/** `process_task_dependencies` — a template task waits for another, plus lag. */
-export interface ProcessTaskDependency {
-  taskId: Uuid;
-  dependsOnTaskId: Uuid;
   lagDays: number;
 }
 

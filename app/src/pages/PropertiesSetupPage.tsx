@@ -247,7 +247,7 @@ export function PropertiesSetupPage() {
           A sweep of `property_defs` alone reports a clean board while the address, the
           council, the owning team, the assignee and both completion dates are collected
           by nothing — they are columns on `jobs` and `projects`, and
-          `process_properties.property_key` points at `property_defs`, so there is nowhere
+          a property step names a `property_defs` row, so there is nowhere
           for the attachment to hang. That is the finding, said out loud rather than left
           as a clean-looking count.
 

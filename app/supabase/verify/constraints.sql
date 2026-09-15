@@ -849,6 +849,46 @@ BEGIN
         WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (parent in another process)', SQLERRM; END;
     END IF;
   END;
+  -- 0131: a step is at most two deep, both ways round. instantiate_process_steps walks the
+  -- task steps in one pass and looks each parent up in a map it builds as it goes, so a
+  -- grandchild lands with no parent at all — silently, on live jobs. Two probes because
+  -- there are two ways in: nesting under something already nested, and nesting something
+  -- that already has children.
+  DECLARE
+    d_proc uuid;
+    d_top  uuid;
+    d_mid  uuid;
+  BEGIN
+    SELECT p.process_id INTO d_proc FROM processes p WHERE p.process_is_active ORDER BY p.process_key LIMIT 1;
+    IF d_proc IS NULL THEN
+      RAISE NOTICE 'note: no active process, so the step depth probes did not run';
+    ELSE
+      INSERT INTO process_steps (process_id, process_step_kind, process_step_name, process_step_position)
+      VALUES (d_proc, 'task', 'Depth probe top 0131', 900) RETURNING process_step_id INTO d_top;
+      INSERT INTO process_steps (process_id, process_step_kind, process_step_name, process_step_position, parent_process_step_id)
+      VALUES (d_proc, 'task', 'Depth probe middle 0131', 901, d_top) RETURNING process_step_id INTO d_mid;
+
+      BEGIN
+        INSERT INTO process_steps (process_id, process_step_kind, process_step_name, process_step_position, parent_process_step_id)
+        VALUES (d_proc, 'checklist', 'Depth probe deep 0131', 902, d_mid);
+        RAISE WARNING 'FAIL: a step went three levels deep';
+      EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a step cannot sit under one that is already nested (0131)';
+        WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (step three deep)', SQLERRM; END;
+
+      -- The other direction. d_mid comes out from under d_top first so it is a top-level
+      -- step WITH a child, which is the shape the second half of the rule is about.
+      UPDATE process_steps SET parent_process_step_id = NULL WHERE process_step_id = d_mid;
+      INSERT INTO process_steps (process_id, process_step_kind, process_step_name, process_step_position, parent_process_step_id)
+      VALUES (d_proc, 'checklist', 'Depth probe tick 0131', 903, d_mid);
+      BEGIN
+        UPDATE process_steps SET parent_process_step_id = d_top WHERE process_step_id = d_mid;
+        RAISE WARNING 'FAIL: a step that has children was nested under another';
+      EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a step with children of its own cannot be nested (0131)';
+        WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (nesting a parent)', SQLERRM; END;
+
+      DELETE FROM process_steps WHERE process_step_id IN (d_mid, d_top);
+    END IF;
+  END;
   -- 0129: a run does not close over an open required step. The fixture makes its own run so
   -- the probe does not depend on one existing, and marks a property step required first,
   -- because the seed marks none (the live database marks six).
@@ -857,6 +897,7 @@ BEGIN
     probe_process uuid;
     probe_step    uuid;
     probe_run     uuid;
+    was_required  boolean;
   BEGIN
     SELECT job_id INTO probe_job FROM jobs ORDER BY job_id LIMIT 1;
     SELECT s.process_id, s.process_step_id INTO probe_process, probe_step
@@ -867,6 +908,10 @@ BEGIN
     IF probe_job IS NULL OR probe_step IS NULL THEN
       RAISE NOTICE 'note: no job or no property step, so the completion gate probe did not run';
     ELSE
+      -- Remember what the step said before the probe changed it. The old cleanup read the
+      -- flag back out of process_properties, which 0131 dropped; the step itself is now the
+      -- only record of it, so it is read here rather than reconstructed afterwards.
+      SELECT process_step_is_required INTO was_required FROM process_steps WHERE process_step_id = probe_step;
       UPDATE process_steps SET process_step_is_required = true WHERE process_step_id = probe_step;
       INSERT INTO process_runs (process_id, job_id, process_run_status)
       VALUES (probe_process, probe_job, 'in_progress') RETURNING process_run_id INTO probe_run;
@@ -906,13 +951,10 @@ BEGIN
         WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (exemption across processes)', SQLERRM; END;
 
       DELETE FROM process_runs WHERE process_run_id = probe_run;
-      -- Put the flag back to what the row it came from says, not to false: six property rows are
-      -- marked required on the live database, and a probe that flattens one is a probe that
+      -- Put the flag back to what it was, not to false: property steps carry the required
+      -- flag the old template list held, and a probe that flattens one is a probe that
       -- changes the thing it measures.
-      UPDATE process_steps s SET process_step_is_required = coalesce(
-          (SELECT pp.process_property_required FROM process_properties pp
-            WHERE pp.process_id = s.process_id AND pp.property_def_key = s.property_def_key), false)
-       WHERE s.process_step_id = probe_step;
+      UPDATE process_steps SET process_step_is_required = was_required WHERE process_step_id = probe_step;
     END IF;
   END;
 END $$;

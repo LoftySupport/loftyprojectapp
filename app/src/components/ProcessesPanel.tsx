@@ -317,7 +317,7 @@ export function ProcessesPanel({
                             onSave={note => act(p.id, () => repo.updateProcessRun(run.id, { note }))} />
                         )}
                         {run && can("user") && !taskCount && (
-                          <ChecklistOffer processId={p.id} onCreate={() => act(p.id, () => repo.instantiateProcessTasks(run.id))} busy={rowBusy} />
+                          <ChecklistOffer processId={p.id} onCreate={() => act(p.id, () => repo.instantiateProcessSteps(run.id))} busy={rowBusy} />
                         )}
                         {run && (
                           <BlockingSteps
@@ -465,13 +465,21 @@ function BlockingSteps({ run, canEdit, onChanged }: {
   );
 }
 
+/**
+ * The repair for a run that started before 0130 and never got its tasks.
+ *
+ * A run makes its own tasks now — `make_tasks_when_a_run_starts` fires on the insert — so a
+ * run with a checklist and no tasks is history rather than the normal path. The offer only
+ * shows where there is something to make.
+ */
 function ChecklistOffer({ processId, onCreate, busy }: { processId: string; onCreate: () => void; busy: boolean }) {
-  const { data: templates } = useQuery(r => r.listProcessTasks(processId), [], [processId]);
-  if (templates.length === 0) return null;
+  const { data: steps } = useQuery(r => r.listProcessSteps(processId), [], [processId]);
+  const taskSteps = steps.filter(st => st.kind === "task");
+  if (taskSteps.length === 0) return null;
   return (
     <div className="field-inline" style={{ marginBottom: "var(--space-8)" }}>
       <Text type="text3" color="secondary" element="span">
-        This process has a {templates.length}-line checklist.
+        This process has a {taskSteps.length}-line checklist.
       </Text>
       <Button size="small" kind="secondary" disabled={busy} onClick={onCreate}>Create the checklist</Button>
     </div>

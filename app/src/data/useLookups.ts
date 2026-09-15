@@ -147,9 +147,25 @@ export function useProcesses(reloadKey: number = 0) {
   return { processes: data, byStage, byId, loading, error };
 }
 
-/** Which properties each process collects, both ways round. */
+/**
+ * Which properties each process collects, both ways round.
+ *
+ * Read off the process's PROPERTY STEPS since 0131 — `process_properties` is gone, and the
+ * property steps of a process are the same list with the tasks and tick boxes interleaved.
+ * `position` is the step's position in the whole list rather than 1..n over the properties
+ * alone, which is what the screens want: the order the process asks for things in.
+ */
 export function useProcessProperties(reloadKey: number = 0) {
-  const { data, loading } = useQuery(r => r.listProcessProperties(), [], [reloadKey]);
+  const { data: steps, loading } = useQuery(r => r.listProcessSteps(), [], [reloadKey]);
+  const data = useMemo<ProcessProperty[]>(
+    () => steps
+      .filter(st => st.kind === "property" && st.propertyKey != null)
+      .map(st => ({
+        processId: st.processId, propertyKey: st.propertyKey!,
+        position: st.position, required: st.isRequired
+      })),
+    [steps]
+  );
   const byProcess = useMemo(() => {
     const out = new Map<string, ProcessProperty[]>();
     data.forEach(pp => { (out.get(pp.processId) ?? out.set(pp.processId, []).get(pp.processId)!).push(pp); });

@@ -4454,6 +4454,130 @@ whole sequence on the fixture job — 16 tasks from 16 task steps, each naming i
 instantiation making none, the run staying open with a required step open, closing when it is
 answered, and not reopening when that answer is undone.
 
+### 15 September — the screens read the steps, and the three template lists go (`0131`)
+
+Stage 2 of the audit, its fourth migration and the end of the stage, on
+`claude/stage2-screens-read-steps`.
+
+`0128` built `process_steps` and filled it, then left `process_properties`, `process_tasks`,
+`process_task_dependencies` and `process_task_checklist_items` in place on purpose: the screens
+still read them, and a migration that drops a table the app is reading is an outage. This change
+moves the screens and then drops the tables, in that order, in one branch — because a pull
+request that only did half would either break the app or leave the debt.
+
+**Setup → Processes edits one list.** Two editors became one. `PropertiesEditor` listed what a
+process collected; `ChecklistEditor` listed the template tasks and their tick boxes; there was no
+way to say "record the plan number, THEN send it to Acquisitions, THEN tick that they replied",
+because the three lists had three orderings that could not be interleaved. `StepsEditor` shows the
+steps in position order with the kind beside each, and offers only the fields that kind allows —
+no team on a tick box, no SLA on a property — because `0128` put a CHECK per kind on the table and
+offering the control would be offering a refusal.
+
+**What moved, and what stayed the same shape.** `useProcessProperties` now reads
+`listProcessSteps()` and narrows to the property kind, so the four screens that ask "which
+properties does this process collect" are unchanged. The Checklist column on the Processes table
+counts TASK steps rather than every step, so the three numbers on a row still add up to what a
+person would count. `ChecklistOffer` in the job drawer became what it now is: the repair for a run
+that started before `0130` and never got its tasks.
+
+**Six methods left the seam and six arrived.** `listProcessProperties`, `setProcessProperties`,
+`listProcessTasks`, the three `ProcessTask` writers, the two task-dependency methods, the four
+template-checklist methods and `instantiateProcessTasks` are gone; `createProcessStep`,
+`updateProcessStep`, `deleteProcessStep`, `reorderProcessSteps`, `setProcessStepDependencies` and
+`instantiateProcessSteps` replace them. A repository method that names a table nobody has is worse
+than no method: it compiles.
+
+**`tasks.process_task_id` became `tasks.process_step_id`.** Not just repointed — renamed. The FK
+repoint alone would have worked, because `0128` gave every task step the id its `process_tasks`
+row had; the name would have gone on telling the next person there was a template-task table to
+go and look at. The values did not move.
+
+**It refuses rather than nulls.** Before the foreign key moves, a check counts the tasks whose
+`process_task_id` has no step behind it. If there are any the migration raises and changes
+nothing, because a silent `on delete set null` would throw away the provenance of every task on
+the board — which is the one thing the column is for. Watched failing: a `process_tasks` row
+inserted after `0128` had run, a task pointed at it, and `0131` refused with the count and left
+the four tables standing.
+
+**Two functions were rewritten rather than left to break.** `process_expected_duration` (`0119`)
+summed `process_tasks.process_task_expected_days`; it now sums the task steps' SLA.
+`notify_working_drawings_value` (`0083`) asked `process_properties` whether a value belongs to a
+Working Drawings process; it now asks the property steps. Neither answers differently — the rows
+are the same rows. `instantiate_process_steps` is re-emitted because its body names the renamed
+column, and a column rename does not reach inside a function body.
+
+**What went with the tables.** `instantiate_process_tasks(uuid)`, and the two guards that only
+existed to hold the old parent and dependency rules — `process_steps` holds both, the parent with
+a composite foreign key and the cycle with its own recursive guard.
+
+**Proof.** Four assertions in the migration's own block, each watched failing: the view rename
+removed and `task_display` still published `process_task_id`; the guard drop removed and the count
+of retired functions came back 1; the foreign key removed and the proof said so; and the stray
+check above. `behaviour.sql`'s instantiation probe was rewritten onto the steps and gains two
+lines — the task names its step, and a second instantiation makes nothing — both watched failing
+with `instantiate_process_steps` replaced by one that writes `null` into the column.
+`rls.sql`'s template-checklist probe became a checklist-step probe, watched failing with a
+permissive insert policy added to `process_steps`.
+
+### 15 September — the review of Stage 2's last change, and the one that was a hole
+
+A subagent read `0131` and the screens back against a clean replay of all 131 migrations.
+Fifteen findings; two of them mattered, and one of those was a security hole `0130` opened.
+
+**`instantiate_process_steps` was SECURITY DEFINER, granted to `authenticated`.**
+`instantiate_process_tasks`, the function it replaces, was invoker from `0081`. `0130`
+wrote `definer`, which turned the RPC into a way around RLS on `tasks`: proved on the
+replay by setting a profile to inactive, watching a direct `insert into tasks` refused by
+policy, and watching the same session call the function and write sixteen rows. It is
+invoker again. **One word was the whole fix**, because the two callers want different
+things and already have them: `make_tasks_when_a_run_starts` is itself SECURITY DEFINER,
+so the call inside it still runs as the owner and a run started by anyone still gets its
+tasks, while a direct call over the API runs as whoever made it. `rls.sql` gains a probe
+that calls the RPC as the demo account on a run id read before the role switch — passing a
+run the caller cannot see is the whole test — watched failing against the definer version.
+
+**A step could be put three levels deep, and then rendered nowhere.**
+`instantiate_process_steps` walks the task steps in one pass and looks each parent up in a
+map it builds as it goes, which supports exactly two levels; at three, a grandchild is
+looked up before its parent is in the map and lands with no parent at all, silently, on
+live jobs. Setup → Processes could reach that in two clicks. The fix is a database rule
+rather than a screen rule, because the screen is not the only writer:
+`guard_process_step_depth` refuses both ways in — a step cannot take a parent that has one,
+and a step that has children cannot be given a parent — with two `constraints.sql` probes
+and a one-off check that nothing existing is already three deep. The screen stops offering
+what the rule refuses.
+
+**Three more that were real.** A property added to a process arrived **required**, where
+`process_properties` defaulted to not required, so adding one would have blocked completion
+of every in-progress run of that process until somebody recorded the value; the create call
+now passes `isRequired: false` for a property step and the required-by-default reading
+stays where `0128` put it, on task steps, under question 0j. The *Waits on* picker offered
+every kind of step while `instantiate_process_steps` carries only task-to-task, so a
+dependency on a property or a tick box was stored and then dropped on the floor — accepting
+a rule and ignoring it, which is worse than refusing it; the picker is task steps only.
+And *Add an automation* wrote the typed name into both the name and the what-it-does
+column, which is a stand-in in a column nobody filled; it is two fields now, and the button
+waits for both.
+
+**And the smaller ones**, each fixed: `required to complete` no longer shows on an
+automation step, whose state the gate cannot read until Stage 4; the reorder's failure
+message says how many steps had already moved rather than claiming none had; the orphan
+branches in the steps editor are gone, because the parent key is `ON DELETE CASCADE` and an
+orphan cannot exist; the *Remove* buttons carry per-step labels again; the Processes page
+reads the steps once rather than twice; two `comment on` strings still describing the
+dropped tables are rewritten in `0131` itself; the sentence a search-and-replace broke on
+Setup → Properties reads as a sentence; the still-open question 0 no longer points at
+`process_properties`; the two `alter … rename column` statements are guarded the way the
+check above them already was; and the workbook generator's header says its compact output
+cannot be pasted at a console any more.
+
+**What was checked and found clean**, worth recording because it is the larger half: no
+function, view, column, index, policy, trigger or `private.` object still names a dropped
+table or the old column; the foreign key repoint carries `on delete set null` as `0078` had
+it; `0129`'s state view picked up the rename on its own because a view body is a parse tree
+rather than text; `ALL_METHODS`, `METHOD_TABLES` and `WIRED` agree with what is implemented;
+no component imports the Supabase client; and the data dictionary regenerates byte-identical.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

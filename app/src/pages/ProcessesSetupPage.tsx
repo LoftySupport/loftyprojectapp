@@ -4,7 +4,7 @@ import { Button, Checkbox, Text, TextField } from "@vibe/core";
 import { MoveArrowDown, MoveArrowUp } from "@vibe/icons";
 import { useQuery, useRepository } from "../data/DataProvider";
 import { usePermission } from "../data/PermissionProvider";
-import { useProcessProperties, useProcesses, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
+import { useProcesses, usePropertyDefs, useStages, useTeams } from "../data/useLookups";
 import { Field, Problem } from "../components/Form";
 import { Tooltip } from "@vibe/tooltip";
 import { Select } from "../components/Select";
@@ -19,8 +19,9 @@ import {
 import {
   PROPERTY_SCOPES, WORKING_STAGES, teamName,
   type LifecycleSubstage,
-  type NewProcess, type Process, type ProcessDependency, type ProcessHistoryEntry, type ProcessPatch, type ProcessTask,
-  type ProcessTaskChecklistItem, type ProcessTaskDependency, type PropertyScope, type Team, type TeamId
+  type NewProcess, type Process, type ProcessDependency, type ProcessHistoryEntry, type ProcessPatch,
+  type ProcessStep, type ProcessStepDependency, type ProcessStepKind, type PropertyDef,
+  type PropertyScope, type Team, type TeamId
 } from "../data/types";
 import "../components/ui.css";
 import "../components/processes.css";
@@ -94,8 +95,11 @@ export function ProcessesSetupPage() {
   const { stageNames } = useStages();
   const { teams } = useTeams();
   const { data: deps } = useQuery(r => r.listProcessDependencies(), [], [reload]);
-  const { byProcess: propsByProcess } = useProcessProperties(reload);
-  const { data: allTasks } = useQuery(r => r.listProcessTasks(), [], [reload]);
+  // One read of the steps, not two. useProcessProperties() answers "which properties does
+  // this process collect" from the same table since 0131, so calling it here as well would
+  // refetch every step of every process on each edit to tell this page something it is
+  // already holding.
+  const { data: allSteps } = useQuery(r => r.listProcessSteps(), [], [reload]);
   const { data: substages } = useQuery(r => r.listSubstages(), [], [reload]);
 
   const selectedId = params.get("process");
@@ -125,11 +129,19 @@ export function ProcessesSetupPage() {
     () => (stageNames.length ? stageNames : [...new Set(processes.map(p => p.stageName))]),
     [stageNames, processes]
   );
+  // The Checklist column counts TASK STEPS, not every step: a process's tick boxes and the
+  // properties it collects each have their own column, and three numbers that add up to the
+  // step count read better than one that does not.
   const tasksByProcess = useMemo(() => {
     const m = new Map<string, number>();
-    allTasks.forEach(t => m.set(t.processId, (m.get(t.processId) ?? 0) + 1));
+    allSteps.filter(st => st.kind === "task").forEach(st => m.set(st.processId, (m.get(st.processId) ?? 0) + 1));
     return m;
-  }, [allTasks]);
+  }, [allSteps]);
+  const propsByProcess = useMemo(() => {
+    const m = new Map<string, number>();
+    allSteps.filter(st => st.kind === "property").forEach(st => m.set(st.processId, (m.get(st.processId) ?? 0) + 1));
+    return m;
+  }, [allSteps]);
   /**
    * The sub-stages a process can be filed into: its own stage's, active ones, in the
    * stage's order (0127). Before the sub-stages were rows this offered every stage's group
@@ -448,7 +460,7 @@ export function ProcessesSetupPage() {
               onRenameGroup={renameSubstage}
               onRetireGroup={retireSubstage}
               teams={teams}
-              propertyCount={id => (propsByProcess.get(id) ?? []).length}
+              propertyCount={id => propsByProcess.get(id) ?? 0}
               taskCount={id => tasksByProcess.get(id) ?? 0}
               selectedId={selectedId}
               onSelect={select}
@@ -491,7 +503,7 @@ export function ProcessesSetupPage() {
                 {flat.map(p => (
                   <ProcessRow
                     key={p.id} p={p} n={p.position} teams={teams}
-                    properties={(propsByProcess.get(p.id) ?? []).length} tasks={tasksByProcess.get(p.id) ?? 0}
+                    properties={propsByProcess.get(p.id) ?? 0} tasks={tasksByProcess.get(p.id) ?? 0}
                     showStage canEdit={canEdit} selected={p.id === selectedId} onSelect={select}
                     confirming={confirmDelete === p.id} onAskDelete={setConfirmDelete} onDelete={remove}
                     columnsCount={columnsCount}
@@ -1073,8 +1085,7 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, substagesFor,
       </section>
 
       <DependenciesEditor process={p} all={all} waitsOn={waitsOn} leadsTo={leadsTo} byId={byId} canEdit={canEdit} onChanged={onChanged} onError={setProblem} />
-      <PropertiesEditor process={p} canEdit={canEdit} onChanged={onChanged} onError={setProblem} />
-      <ChecklistEditor process={p} teams={teams} canEdit={canEdit} onError={setProblem} />
+      <StepsEditor process={p} teams={teams} canEdit={canEdit} onChanged={onChanged} onError={setProblem} />
       <ProcessHistory process={p} substageNames={substageNames} />
 
       {canEdit && (
@@ -1248,250 +1259,393 @@ function DependenciesEditor({ process: p, all, waitsOn, leadsTo, byId, canEdit, 
   );
 }
 
-// -------------------------------------------------------------------- properties
-function PropertiesEditor({ process: p, canEdit, onChanged, onError }: {
-  process: Process; canEdit: boolean; onChanged: () => void; onError: (e: string | null) => void;
+// -------------------------------------------------------------------------- steps
+/**
+ * The one list a process is (0128): properties to record, tasks to do, tick boxes to tick,
+ * automations to fire, in the order the process works through them.
+ *
+ * This replaced two editors and a third list. Until 0131 a process was three tables —
+ * `process_properties`, `process_tasks` and `process_task_checklist_items` — with three
+ * orderings that could not be interleaved, so "record the plan number, THEN send it to the
+ * Acquisitions team, THEN tick that they replied" could not be written down. Amber's
+ * walk-through of Working Drawings on 15 September is one numbered list, and this is it.
+ *
+ * The kind decides which fields mean anything, and the database says so with a CHECK per
+ * kind rather than by convention, so this editor offers a field only where the kind allows
+ * it: no team on a tick box, no SLA on a property, no property key on an automation.
+ */
+function StepsEditor({ process: p, teams, canEdit, onChanged, onError }: {
+  process: Process; teams: readonly Team[]; canEdit: boolean;
+  onChanged: () => void; onError: (e: string | null) => void;
 }) {
   const repo = useRepository();
   const { propertyDefs } = usePropertyDefs();
-  const { byProcess } = useProcessProperties();
   const [reload, setReload] = useState(0);
-  const { data: fresh } = useQuery(r => r.listProcessProperties(), [], [reload]);
-  const mine = useMemo(() => (fresh.length ? fresh : Array.from(byProcess.values()).flat()).filter(pp => pp.processId === p.id).sort((a, b) => a.position - b.position), [fresh, byProcess, p.id]);
-  const defByKey = new Map(propertyDefs.map(d => [d.key, d]));
-  const [adding, setAdding] = useState<string | null>(null);
-  // Both scopes, deliberately: a process asks for what it asks for, and 0079 already has
-  // job properties attached to project processes and the other way round (Amber, 3 Sep).
-  const candidates = propertyDefs.filter(d => d.isActive && !mine.some(pp => pp.propertyKey === d.key))
-    .sort((a, b) => (a.stageName === p.stageName ? 0 : 1) - (b.stageName === p.stageName ? 0 : 1) || a.label.localeCompare(b.label));
-
-  async function write(next: { propertyKey: string; required: boolean }[]) {
-    onError(null);
-    try { await repo.setProcessProperties(p.id, next); setReload(n => n + 1); onChanged(); }
-    catch (e) { onError(e instanceof Error ? e.message : String(e)); }
-  }
-  const current = mine.map(pp => ({ propertyKey: pp.propertyKey, required: pp.required }));
-  const move = (i: number, dir: -1 | 1) => {
-    const next = [...current]; const j = i + dir;
-    if (j < 0 || j >= next.length) return;
-    [next[i], next[j]] = [next[j], next[i]];
-    write(next);
-  };
-  const jobCount = mine.filter(pp => defByKey.get(pp.propertyKey)?.scope === "job").length;
-  const projectCount = mine.filter(pp => defByKey.get(pp.propertyKey)?.scope === "project").length;
-
-  return (
-    <section className="panel">
-      <div className="panel-head">
-        <Text type="text2" weight="bold">Properties collected ({mine.length})</Text>
-        <Text type="text3" color="secondary">
-          {jobCount && projectCount ? `${jobCount} job · ${projectCount} project` : "in the order the process asks for them"}
-        </Text>
-      </div>
-      {mine.length === 0 && <Text type="text3" color="secondary" ellipsis={false}>This process collects no properties yet.</Text>}
-      <ul className="dep-list">
-        {mine.map((pp, i) => {
-          const d = defByKey.get(pp.propertyKey);
-          return (
-            <li key={pp.propertyKey}>
-              <Text type="text2" element="span" style={{ flex: "1 1 200px" }}>
-                {d?.label ?? pp.propertyKey}
-                <span className="slot-sub">{d ? [d.scope, d.format === "unknown" ? "format not set" : d.format, d.stageName !== p.stageName ? d.stageName : null].filter(Boolean).join(" · ") : ""}</span>
-              </Text>
-              <label className="pf-check">
-                <input type="checkbox" checked={pp.required} disabled={!canEdit}
-                  onChange={e => write(current.map(c => c.propertyKey === pp.propertyKey ? { ...c, required: e.target.checked } : c))} />
-                <Text type="text3" element="span">required to complete</Text>
-              </label>
-              {canEdit && (
-                <>
-                  <Button size="xs" kind="tertiary" aria-label={`Move ${d?.label ?? pp.propertyKey} up`} disabled={i === 0} onClick={() => move(i, -1)}>
-                    <MoveArrowUp size={16} aria-hidden />
-                  </Button>
-                  <Button size="xs" kind="tertiary" aria-label={`Move ${d?.label ?? pp.propertyKey} down`} disabled={i === mine.length - 1} onClick={() => move(i, 1)}>
-                    <MoveArrowDown size={16} aria-hidden />
-                  </Button>
-                  <Button size="xs" kind="tertiary" onClick={() => write(current.filter(c => c.propertyKey !== pp.propertyKey))}>Remove</Button>
-                </>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-      {canEdit && (
-        <div className="field-inline" style={{ marginTop: "var(--space-8)", flexWrap: "wrap" }}>
-          <Select aria-label="Add a property this process collects" clearable placeholder="Add a property…"
-            options={candidates.map(d => ({ value: d.key, label: `${d.label} — ${d.stageName} (${d.scope})` }))}
-            value={adding} onChange={v => setAdding(v)} />
-          <Button size="small" disabled={!adding} onClick={() => { if (adding) { write([...current, { propertyKey: adding, required: false }]); setAdding(null); } }}>Add</Button>
-        </div>
-      )}
-      <Text type="text3" color="secondary" ellipsis={false} element="p" style={{ marginTop: "var(--space-8)" }}>
-        Job and project properties both — a process asks for whichever it needs. Define new properties,
-        their formats and who may see them in the Properties tab.
-      </Text>
-    </section>
-  );
-}
-
-// --------------------------------------------------------------------- checklist
-/**
- * Every template task with everything about it in view — name, team, days, whether it
- * waits on somebody outside, which task it sits under, what it waits on, and its tick-box
- * lines (0081). Nothing is behind an "Order" or "More" button: the sidebar is the place
- * to edit, so it shows the whole thing (Amber, 2 Sep).
- */
-function ChecklistEditor({ process: p, teams, canEdit, onError }: {
-  process: Process; teams: readonly Team[]; canEdit: boolean; onError: (e: string | null) => void;
-}) {
-  const repo = useRepository();
-  const [reload, setReload] = useState(0);
-  const { data: tasks } = useQuery(r => r.listProcessTasks(p.id), [], [p.id, reload]);
-  const { data: deps } = useQuery(r => r.listProcessTaskDependencies(p.id), [], [p.id, reload]);
-  const { data: lines } = useQuery(r => r.listProcessTaskChecklist(p.id), [], [p.id, reload]);
-  const [newName, setNewName] = useState("");
-  const bump = () => setReload(n => n + 1);
+  const { data: steps } = useQuery(r => r.listProcessSteps(p.id), [], [p.id, reload]);
+  const { data: deps } = useQuery(r => r.listProcessStepDependencies(p.id), [], [p.id, reload]);
+  const [addingProperty, setAddingProperty] = useState<string | null>(null);
+  const [newTask, setNewTask] = useState("");
+  const [newAutomation, setNewAutomation] = useState("");
+  const [newAutomationDoes, setNewAutomationDoes] = useState("");
 
   async function run(fn: () => Promise<unknown>) {
     onError(null);
-    try { await fn(); bump(); }
+    try { await fn(); setReload(n => n + 1); onChanged(); }
     catch (e) { onError(e instanceof Error ? e.message : String(e)); }
   }
 
+  const defByKey = useMemo(() => new Map(propertyDefs.map(d => [d.key, d])), [propertyDefs]);
+  const taskSteps = useMemo(() => steps.filter(st => st.kind === "task"), [steps]);
+
+  // Parents in position order, each followed by its children. Same shape the checklist
+  // editor had, because a tick box under its task is how the list reads on paper.
+  // Two levels, and the database says so (0131): a step under a step that is already nested
+  // has nowhere to draw and nothing to instantiate it correctly, so it cannot exist. That is
+  // also why there is no orphan pass here — the parent key is ON DELETE CASCADE, so a step
+  // whose parent is gone is gone with it.
   const ordered = useMemo(() => {
-    // Parents in position order, each followed by its children.
-    const parents = tasks.filter(t => t.parentId == null).sort((a, b) => a.position - b.position);
-    const out: ProcessTask[] = [];
-    parents.forEach(t => {
-      out.push(t);
-      tasks.filter(c => c.parentId === t.id).sort((a, b) => a.position - b.position).forEach(c => out.push(c));
+    const out: ProcessStep[] = [];
+    const children = (id: string) => steps.filter(st => st.parentId === id).sort((a, b) => a.position - b.position);
+    steps.filter(st => st.parentId == null).sort((a, b) => a.position - b.position).forEach(st => {
+      out.push(st);
+      children(st.id).forEach(c => out.push(c));
     });
-    // Orphans whose parent is gone still show.
-    tasks.filter(t => t.parentId != null && !tasks.some(x => x.id === t.parentId)).forEach(t => out.push(t));
     return out;
-  }, [tasks]);
-  const linesByTask = useMemo(() => {
-    const m = new Map<string, ProcessTaskChecklistItem[]>();
-    lines.forEach(l => { (m.get(l.processTaskId) ?? m.set(l.processTaskId, []).get(l.processTaskId)!).push(l); });
-    m.forEach(list => list.sort((a, b) => a.position - b.position));
-    return m;
-  }, [lines]);
-  const teamOptions = teams.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }));
-  const add = () => {
-    if (!newName.trim()) return;
-    run(() => repo.createProcessTask({ processId: p.id, name: newName.trim(), position: tasks.length + 1 }));
-    setNewName("");
+  }, [steps]);
+
+  const stepLabel = (st: ProcessStep) =>
+    st.kind === "property" ? defByKey.get(st.propertyKey ?? "")?.label ?? st.propertyKey ?? "?" : st.name ?? "?";
+
+  /**
+   * Move a step among ITS SIBLINGS, then write the flattened order 1..n.
+   *
+   * Swapping with the next row on screen would move a task past one of its own tick boxes,
+   * which the tree then puts straight back — so the swap is with the next step that has the
+   * same parent, and the whole process is renumbered from the tree afterwards.
+   */
+  const move = (st: ProcessStep, dir: -1 | 1) => {
+    const siblings = steps.filter(x => x.parentId === st.parentId).sort((a, b) => a.position - b.position);
+    const i = siblings.findIndex(x => x.id === st.id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= siblings.length) return;
+    const swapped = [...siblings];
+    [swapped[i], swapped[j]] = [swapped[j], swapped[i]];
+    const order = new Map(swapped.map((x, n) => [x.id, n]));
+    const flat: string[] = [];
+    const push = (x: ProcessStep) => {
+      flat.push(x.id);
+      steps.filter(c => c.parentId === x.id)
+        .sort((a, b) => (order.get(a.id) ?? a.position) - (order.get(b.id) ?? b.position))
+        .forEach(push);
+    };
+    steps.filter(x => x.parentId == null)
+      .sort((a, b) => (order.get(a.id) ?? a.position) - (order.get(b.id) ?? b.position))
+      .forEach(push);
+    run(() => repo.reorderProcessSteps(p.id, flat));
+  };
+  const siblingCount = (st: ProcessStep) => steps.filter(x => x.parentId === st.parentId).length;
+  const siblingIndex = (st: ProcessStep) =>
+    steps.filter(x => x.parentId === st.parentId).sort((a, b) => a.position - b.position).findIndex(x => x.id === st.id);
+
+  // Both scopes, deliberately: a process asks for what it asks for, and 0079 already has
+  // job properties attached to project processes and the other way round (Amber, 3 Sep).
+  const candidates = propertyDefs
+    .filter(d => d.isActive && !steps.some(st => st.kind === "property" && st.propertyKey === d.key))
+    .sort((a, b) => (a.stageName === p.stageName ? 0 : 1) - (b.stageName === p.stageName ? 0 : 1) || a.label.localeCompare(b.label));
+
+  const counts = {
+    property: steps.filter(st => st.kind === "property").length,
+    task: taskSteps.length,
+    checklist: steps.filter(st => st.kind === "checklist").length,
+    automation: steps.filter(st => st.kind === "automation").length
+  };
+  const summary = [
+    counts.property ? `${counts.property} to record` : null,
+    counts.task ? `${counts.task} to do` : null,
+    counts.checklist ? `${counts.checklist} to tick` : null,
+    counts.automation ? `${counts.automation} automated` : null
+  ].filter(Boolean).join(" · ");
+
+  const addTask = () => {
+    if (!newTask.trim()) return;
+    run(() => repo.createProcessStep({ processId: p.id, kind: "task", name: newTask.trim() }));
+    setNewTask("");
+  };
+  // Two fields, because they are two facts. Copying the name into "what it does" would put a
+  // stand-in in a column nobody filled, and the row would then read "Does <its own name>"
+  // until somebody noticed — which is the invented default this repository keeps warning
+  // about. The database requires the note (0128's CHECK), so the button waits for both.
+  const addAutomation = () => {
+    if (!newAutomation.trim() || !newAutomationDoes.trim()) return;
+    run(() => repo.createProcessStep({
+      processId: p.id, kind: "automation", name: newAutomation.trim(), automation: newAutomationDoes.trim()
+    }));
+    setNewAutomation("");
+    setNewAutomationDoes("");
   };
 
   return (
     <section className="panel">
       <div className="panel-head">
-        <Text type="text2" weight="bold">Checklist ({tasks.length})</Text>
-        <Text type="text3" color="secondary">the tasks a run hands the record — with team, days and order</Text>
+        <Text type="text2" weight="bold">Steps ({steps.length})</Text>
+        <Text type="text3" color="secondary">{summary || "in the order the process works through them"}</Text>
       </div>
-      {tasks.length === 0 && <Text type="text3" color="secondary" ellipsis={false}>No checklist. A run of this process creates no tasks.</Text>}
-      {ordered.map(t => (
-        <TemplateTask key={t.id} task={t} tasks={tasks} waitsOn={deps.filter(d => d.taskId === t.id)} lines={linesByTask.get(t.id) ?? []}
-          teamOptions={teamOptions} teams={teams} canEdit={canEdit} run={run} />
+      {steps.length === 0 && (
+        <Text type="text3" color="secondary" ellipsis={false}>
+          This process has no steps yet. Add the first property it records, or the first task it hands out.
+        </Text>
+      )}
+      {ordered.map(st => (
+        <StepRow
+          key={st.id} step={st} steps={steps} taskSteps={taskSteps}
+          waitsOn={deps.filter(d => d.stepId === st.id)}
+          label={stepLabel(st)} defByKey={defByKey} propertyDefs={propertyDefs}
+          teams={teams} canEdit={canEdit} run={run}
+          index={siblingIndex(st)} siblings={siblingCount(st)} onMove={move}
+          labelOf={stepLabel}
+        />
       ))}
       {canEdit && (
-        <div className="field-inline" style={{ marginTop: "var(--space-8)", flexWrap: "wrap" }}>
-          <input className="pf-input" style={{ width: "min(320px, 100%)" }} aria-label="New task name" placeholder="Add a task…" value={newName}
-            onChange={e => setNewName(e.target.value)}
-            onKeyDown={e => { if (e.key === "Enter") add(); }} />
-          <Button size="small" disabled={!newName.trim()} onClick={add}>Add task</Button>
+        <div className="proc-body" style={{ marginTop: "var(--space-12)" }}>
+          <div className="field-inline" style={{ flexWrap: "wrap" }}>
+            <Select aria-label="Add a property this process records" clearable placeholder="Add a property…"
+              options={candidates.map(d => ({ value: d.key, label: `${d.label} — ${d.stageName} (${d.scope})` }))}
+              value={addingProperty} onChange={v => setAddingProperty(v)} />
+            <Button size="small" disabled={!addingProperty}
+              onClick={() => {
+                if (!addingProperty) return;
+                // Optional, deliberately. `process_properties` defaulted to not required and
+                // the old editor added one that way; `createProcessStep` defaults to required
+                // because that is the reading for TASK steps (open question 0j). Letting that
+                // default reach a property would mean adding one to a process immediately
+                // blocked every in-progress run of it until somebody recorded the value.
+                run(() => repo.createProcessStep({
+                  processId: p.id, kind: "property", propertyKey: addingProperty, isRequired: false
+                }));
+                setAddingProperty(null);
+              }}>Add property</Button>
+          </div>
+          <div className="field-inline" style={{ marginTop: "var(--space-8)", flexWrap: "wrap" }}>
+            <input className="pf-input" style={{ width: "min(320px, 100%)" }} aria-label="New task name" placeholder="Add a task…"
+              value={newTask} onChange={e => setNewTask(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") addTask(); }} />
+            <Button size="small" disabled={!newTask.trim()} onClick={addTask}>Add task</Button>
+          </div>
+          <div className="field-inline" style={{ marginTop: "var(--space-8)", flexWrap: "wrap" }}>
+            <input className="pf-input" style={{ width: "min(220px, 100%)" }} aria-label="New automation" placeholder="Add an automation…"
+              value={newAutomation} onChange={e => setNewAutomation(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") addAutomation(); }} />
+            <input className="pf-input" style={{ width: "min(280px, 100%)" }} aria-label="What the new automation does" placeholder="…and what it does"
+              value={newAutomationDoes} onChange={e => setNewAutomationDoes(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter") addAutomation(); }} />
+            <Button size="small" disabled={!newAutomation.trim() || !newAutomationDoes.trim()} onClick={addAutomation}>Add automation</Button>
+          </div>
+          <Text type="text3" color="secondary" ellipsis={false} element="p" style={{ marginTop: "var(--space-8)" }}>
+            A tick box is added under the task it belongs to. Job and project properties both — a process
+            asks for whichever it needs; define new ones in the Properties tab. An automation is a note
+            until Setup → Automations gives it something to fire.
+          </Text>
         </div>
       )}
     </section>
   );
 }
 
-function TemplateTask({ task: t, tasks, waitsOn, lines, teamOptions, teams, canEdit, run }: {
-  task: ProcessTask; tasks: ProcessTask[]; waitsOn: ProcessTaskDependency[]; lines: ProcessTaskChecklistItem[];
-  teamOptions: { value: string; label: string }[]; teams: readonly Team[]; canEdit: boolean;
-  run: (fn: () => Promise<unknown>) => Promise<void>;
+const STEP_KIND_LABELS: Record<ProcessStepKind, string> = {
+  property: "Record",
+  task: "Task",
+  checklist: "Tick box",
+  automation: "Automation"
+};
+
+/**
+ * One step, with everything about it in view — nothing behind an "Order" or "More" button,
+ * because the sidebar is the place to edit and it shows the whole thing (Amber, 2 Sep).
+ *
+ * Which fields appear is the kind's business: the CHECK constraints in 0128 refuse a team on
+ * a tick box, so offering the control would be offering a refusal.
+ */
+function StepRow({
+  step: st, steps, taskSteps, waitsOn, label, defByKey, propertyDefs, teams, canEdit, run, index, siblings, onMove, labelOf
+}: {
+  step: ProcessStep; steps: ProcessStep[]; taskSteps: ProcessStep[]; waitsOn: ProcessStepDependency[];
+  label: string; defByKey: Map<string, PropertyDef>; propertyDefs: readonly PropertyDef[];
+  teams: readonly Team[]; canEdit: boolean; run: (fn: () => Promise<unknown>) => Promise<void>;
+  index: number; siblings: number; onMove: (step: ProcessStep, dir: -1 | 1) => void;
+  labelOf: (step: ProcessStep) => string;
 }) {
   const repo = useRepository();
   const [adding, setAdding] = useState<string | null>(null);
   const [newLine, setNewLine] = useState("");
-  const byId = new Map(tasks.map(x => [x.id, x]));
-  const current = waitsOn.map(d => ({ taskId: d.dependsOnTaskId, lagDays: d.lagDays }));
-  const others = tasks.filter(x => x.id !== t.id);
+  const byId = new Map(steps.map(x => [x.id, x]));
+  const current = waitsOn.map(d => ({ stepId: d.dependsOnStepId, lagDays: d.lagDays }));
+  const hasChildren = steps.some(x => x.parentId === st.id);
+  const teamOptions = teams.filter(t => t.isActive).map(t => ({ value: t.id, label: t.name }));
+  const def = st.kind === "property" ? defByKey.get(st.propertyKey ?? "") : undefined;
   const addLine = () => {
     if (!newLine.trim()) return;
-    run(() => repo.addProcessTaskChecklistItem(t.id, newLine.trim()));
+    run(() => repo.createProcessStep({ processId: st.processId, kind: "checklist", name: newLine.trim(), parentId: st.id }));
     setNewLine("");
   };
 
   return (
-    <div className={`tpl-task${t.parentId ? " is-child" : ""}`} style={{ flexDirection: "column", alignItems: "stretch" }}>
+    <div className={`tpl-task${st.parentId ? " is-child" : ""}`} style={{ flexDirection: "column", alignItems: "stretch" }}>
       <div className="field-inline" style={{ flexWrap: "wrap" }}>
         <span className="tpl-name">
-          <BlurText value={t.name} disabled={!canEdit} label={`Task ${t.name}`} onCommit={v => v.trim() && run(() => repo.updateProcessTask(t.id, { name: v.trim() }))} wide plain />
-          {t.importRef != null && <span className="slot-sub">line {t.importRef}</span>}
+          {st.kind === "property" ? (
+            <Text type="text2" element="span">
+              {label}
+              <span className="slot-sub">
+                {def ? [def.scope, def.format === "unknown" ? "format not set" : def.format, def.stageName].filter(Boolean).join(" · ") : "definition missing"}
+              </span>
+            </Text>
+          ) : (
+            <BlurText value={label} disabled={!canEdit} label={`${STEP_KIND_LABELS[st.kind]} ${label}`} wide plain
+              onCommit={v => v.trim() && run(() => repo.updateProcessStep(st.id, { name: v.trim() }))} />
+          )}
+          {st.importRef != null && <span className="slot-sub">line {st.importRef}</span>}
         </span>
-        {canEdit ? (
-          <Select className="proc-control" aria-label={`Team for ${t.name}`} clearable placeholder="No team" options={teamOptions} value={t.owningTeam}
-            onChange={v => run(() => repo.updateProcessTask(t.id, { owningTeam: v as TeamId | null }))} />
-        ) : <Text type="text3" color="secondary" element="span">{t.owningTeam ? teamName(t.owningTeam, teams) : "no team"}</Text>}
-        <NumberInput value={t.expectedDays} disabled={!canEdit} label={`Days for ${t.name}`} small min={0} onCommit={v => run(() => repo.updateProcessTask(t.id, { expectedDays: v }))} />
-        <Text type="text3" color="secondary" element="span">days</Text>
-        <label className="pf-check">
-          <input type="checkbox" checked={t.isExternal} disabled={!canEdit} onChange={e => run(() => repo.updateProcessTask(t.id, { isExternal: e.target.checked }))} />
-          <Text type="text3" element="span">external</Text>
-        </label>
-        {canEdit && <Button size="xs" kind="tertiary" onClick={() => run(() => repo.deleteProcessTask(t.id))}>Remove</Button>}
+        <Text type="text3" color="secondary" element="span">{STEP_KIND_LABELS[st.kind]}</Text>
+        {st.kind === "task" && (
+          <>
+            {canEdit ? (
+              <Select className="proc-control" aria-label={`Team for ${label}`} clearable placeholder="No team" options={teamOptions}
+                value={st.owningTeam} onChange={v => run(() => repo.updateProcessStep(st.id, { owningTeam: v as TeamId | null }))} />
+            ) : <Text type="text3" color="secondary" element="span">{st.owningTeam ? teamName(st.owningTeam, teams) : "no team"}</Text>}
+            <NumberInput value={st.expectedDays} disabled={!canEdit} label={`Days for ${label}`} small min={0}
+              onCommit={v => run(() => repo.updateProcessStep(st.id, { expectedDays: v }))} />
+            <Text type="text3" color="secondary" element="span">days</Text>
+            <label className="pf-check">
+              <input type="checkbox" checked={st.isExternal} disabled={!canEdit}
+                onChange={e => run(() => repo.updateProcessStep(st.id, { isExternal: e.target.checked }))} />
+              <Text type="text3" element="span">external</Text>
+            </label>
+          </>
+        )}
+        {/* Not on an automation step: 0129's state view returns `not_tracked` for one and the
+            gate only blocks on `open`, so the flag would be a control that writes something
+            the rule can never read. It comes back when Stage 4 gives an automation a run log. */}
+        {st.kind !== "automation" && (
+          <label className="pf-check">
+            <input type="checkbox" checked={st.isRequired} disabled={!canEdit}
+              onChange={e => run(() => repo.updateProcessStep(st.id, { isRequired: e.target.checked }))} />
+            <Text type="text3" element="span">required to complete</Text>
+          </label>
+        )}
+        {canEdit && (
+          <>
+            <Button size="xs" kind="tertiary" aria-label={`Move ${label} up`} disabled={index <= 0} onClick={() => onMove(st, -1)}>
+              <MoveArrowUp size={16} aria-hidden />
+            </Button>
+            <Button size="xs" kind="tertiary" aria-label={`Move ${label} down`} disabled={index < 0 || index >= siblings - 1} onClick={() => onMove(st, 1)}>
+              <MoveArrowDown size={16} aria-hidden />
+            </Button>
+            <Button size="xs" kind="tertiary" aria-label={`Remove ${STEP_KIND_LABELS[st.kind].toLowerCase()} ${label}`}
+              onClick={() => run(() => repo.deleteProcessStep(st.id))}>Remove</Button>
+          </>
+        )}
       </div>
 
       <div className="proc-body">
-        <div className="field-inline" style={{ flexWrap: "wrap" }}>
-          <Text type="text3" element="span">Under</Text>
-          {canEdit ? (
-            <Select className="proc-control" aria-label={`Parent of ${t.name}`} clearable placeholder="No parent — a top-level task"
-              options={others.filter(x => x.parentId == null).map(x => ({ value: x.id, label: x.name }))}
-              value={t.parentId} onChange={v => run(() => repo.updateProcessTask(t.id, { parentId: v }))} />
-          ) : <Text type="text3" color="secondary" element="span">{t.parentId ? byId.get(t.parentId)?.name ?? "?" : "nothing — a top-level task"}</Text>}
-        </div>
+        {st.kind === "automation" && (
+          <div className="field-inline" style={{ flexWrap: "wrap" }}>
+            <Text type="text3" element="span">Does</Text>
+            <BlurText value={st.automation ?? ""} disabled={!canEdit} label={`What ${label} does`} wide plain
+              onCommit={v => v.trim() && run(() => repo.updateProcessStep(st.id, { automation: v.trim() }))} />
+          </div>
+        )}
+
+        {st.kind === "task" && (
+          <div className="field-inline" style={{ flexWrap: "wrap" }}>
+            <Text type="text3" element="span">Stamps</Text>
+            {canEdit ? (
+              <Select className="proc-control" aria-label={`Property ${label} stamps when it is ticked`} clearable
+                placeholder="Nothing — ticking it records no date"
+                options={propertyDefs.filter(d => d.isActive && d.format === "date").map(d => ({ value: d.key, label: `${d.label} — ${d.stageName}` }))}
+                value={st.stampsPropertyKey}
+                onChange={v => run(() => repo.updateProcessStep(st.id, { stampsPropertyKey: v }))} />
+            ) : (
+              <Text type="text3" color="secondary" element="span">
+                {st.stampsPropertyKey ? defByKey.get(st.stampsPropertyKey)?.label ?? st.stampsPropertyKey : "nothing"}
+              </Text>
+            )}
+          </div>
+        )}
+
+        {/* A list is two deep and the database holds that (0131), so the picker is not offered
+            to a step that already has steps of its own — it would be a control whose every
+            use is refused. The parents on offer are top-level tasks for the same reason. */}
+        {(st.kind === "task" || st.kind === "checklist") && (
+          <div className="field-inline" style={{ flexWrap: "wrap" }}>
+            <Text type="text3" element="span">Under</Text>
+            {canEdit && !hasChildren ? (
+              <Select className="proc-control" aria-label={`Parent of ${label}`} clearable={st.kind === "task"}
+                placeholder={st.kind === "checklist" ? "Pick the task it sits under" : "No parent — a top-level task"}
+                options={taskSteps.filter(x => x.id !== st.id && x.parentId == null).map(x => ({ value: x.id, label: labelOf(x) }))}
+                value={st.parentId} onChange={(v: string | null) => run(() => repo.updateProcessStep(st.id, { parentId: v }))} />
+            ) : (
+              <Text type="text3" color="secondary" element="span">
+                {hasChildren
+                  ? "nothing — it has steps of its own, and a list is two deep"
+                  : st.parentId ? labelOf(byId.get(st.parentId) ?? st) : "nothing — a top-level task"}
+              </Text>
+            )}
+          </div>
+        )}
 
         <Text type="text3" weight="bold" element="div" style={{ marginTop: "var(--space-8)" }}>Waits on</Text>
         {waitsOn.length === 0 && <Text type="text3" color="secondary" ellipsis={false}>Nothing — it can start with the run.</Text>}
         <ul className="dep-list">
           {waitsOn.map(d => (
-            <li key={d.dependsOnTaskId}>
-              <Text type="text2" element="span" style={{ flex: "1 1 160px" }}>{byId.get(d.dependsOnTaskId)?.name ?? "?"}</Text>
+            <li key={d.dependsOnStepId}>
+              <Text type="text2" element="span" style={{ flex: "1 1 160px" }}>
+                {byId.has(d.dependsOnStepId) ? labelOf(byId.get(d.dependsOnStepId)!) : "?"}
+              </Text>
               <Text type="text3" color="secondary" element="span">then</Text>
-              <NumberInput small min={0} value={d.lagDays} disabled={!canEdit} label={`Lag after ${byId.get(d.dependsOnTaskId)?.name ?? "the task"}`}
-                onCommit={v => { const lag = Math.max(0, v ?? 0); if (lag !== d.lagDays) run(() => repo.setProcessTaskDependencies(t.id, current.map(c => c.taskId === d.dependsOnTaskId ? { ...c, lagDays: lag } : c))); }} />
+              <NumberInput small min={0} value={d.lagDays} disabled={!canEdit}
+                label={`Lag after ${byId.has(d.dependsOnStepId) ? labelOf(byId.get(d.dependsOnStepId)!) : "the step"}`}
+                onCommit={v => {
+                  const lag = Math.max(0, v ?? 0);
+                  if (lag !== d.lagDays) {
+                    run(() => repo.setProcessStepDependencies(st.id, current.map(c => c.stepId === d.dependsOnStepId ? { ...c, lagDays: lag } : c)));
+                  }
+                }} />
               <Text type="text3" color="secondary" element="span">days</Text>
-              {canEdit && <Button size="xs" kind="tertiary" onClick={() => run(() => repo.setProcessTaskDependencies(t.id, current.filter(c => c.taskId !== d.dependsOnTaskId)))}>Remove</Button>}
+              {canEdit && (
+                <Button size="xs" kind="tertiary"
+                  aria-label={`Stop ${label} waiting on ${byId.has(d.dependsOnStepId) ? labelOf(byId.get(d.dependsOnStepId)!) : "it"}`}
+                  onClick={() => run(() => repo.setProcessStepDependencies(st.id, current.filter(c => c.stepId !== d.dependsOnStepId)))}>
+                  Remove
+                </Button>
+              )}
             </li>
           ))}
         </ul>
         {canEdit && (
           <div className="field-inline" style={{ marginTop: "var(--space-4)", flexWrap: "wrap" }}>
-            <Select aria-label={`Add a task ${t.name} waits on`} clearable placeholder="Add a task this waits on…"
-              options={others.filter(x => !current.some(c => c.taskId === x.id)).map(x => ({ value: x.id, label: x.name }))}
+            {/* Task steps only. The database accepts a dependency between any two steps of a
+                process, but `instantiate_process_steps` builds its map from the task steps
+                and drops any edge whose ends are not both in it — so offering a property or
+                a tick box here would be accepting a rule and then ignoring it, which is
+                worse than refusing it, because nothing tells the person. */}
+            <Select aria-label={`Add a step ${label} waits on`} clearable placeholder="Add a task this waits on…"
+              options={taskSteps.filter(x => x.id !== st.id && !current.some(c => c.stepId === x.id)).map(x => ({ value: x.id, label: labelOf(x) }))}
               value={adding} onChange={v => setAdding(v)} />
-            <Button size="small" disabled={!adding} onClick={() => { if (adding) { run(() => repo.setProcessTaskDependencies(t.id, [...current, { taskId: adding, lagDays: 0 }])); setAdding(null); } }}>Add</Button>
+            <Button size="small" disabled={!adding}
+              onClick={() => {
+                if (!adding) return;
+                run(() => repo.setProcessStepDependencies(st.id, [...current, { stepId: adding, lagDays: 0 }]));
+                setAdding(null);
+              }}>Add</Button>
           </div>
         )}
 
-        <Text type="text3" weight="bold" element="div" style={{ marginTop: "var(--space-8)" }}>Tick boxes ({lines.length})</Text>
-        {lines.length === 0 && <Text type="text3" color="secondary" ellipsis={false}>None — the task is one line when a run creates it.</Text>}
-        <ul className="dep-list">
-          {lines.map(l => (
-            <li key={l.id}>
-              <span style={{ flex: "1 1 200px", minWidth: 0 }}>
-                <BlurText value={l.text} disabled={!canEdit} label={`Tick box ${l.text}`} onCommit={v => v.trim() && run(() => repo.updateProcessTaskChecklistItem(l.id, { text: v.trim() }))} wide plain />
-              </span>
-              {canEdit && <Button size="xs" kind="tertiary" aria-label={`Remove tick box ${l.text}`} onClick={() => run(() => repo.deleteProcessTaskChecklistItem(l.id))}>Remove</Button>}
-            </li>
-          ))}
-        </ul>
-        {canEdit && (
-          <div className="field-inline" style={{ marginTop: "var(--space-4)", flexWrap: "wrap" }}>
-            <input className="pf-input" style={{ width: "min(320px, 100%)" }} aria-label={`New tick box for ${t.name}`} placeholder="Add a tick box…" value={newLine}
-              onChange={e => setNewLine(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addLine(); }} />
+        {/* Only on a top-level task: a tick box under a nested one would be three deep, which
+            the database refuses and instantiation could not carry anyway. */}
+        {st.kind === "task" && st.parentId == null && canEdit && (
+          <div className="field-inline" style={{ marginTop: "var(--space-8)", flexWrap: "wrap" }}>
+            <input className="pf-input" style={{ width: "min(320px, 100%)" }} aria-label={`New tick box for ${label}`} placeholder="Add a tick box…"
+              value={newLine} onChange={e => setNewLine(e.target.value)} onKeyDown={e => { if (e.key === "Enter") addLine(); }} />
             <Button size="small" disabled={!newLine.trim()} onClick={addLine}>Add</Button>
           </div>
         )}

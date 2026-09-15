@@ -712,7 +712,7 @@ from (
       where tc.constraint_type = 'FOREIGN KEY' and tc.table_schema = 'public')
     and c.column_name not in ('project_id', 'job_id', 'profile_id', 'team_id', 'task_id', 'variation_id', 'process_id',
                               'document_id', 'comment_id', 'tag_id', 'address_id', 'property_def_key', 'feedback_id',
-                              'process_run_id', 'process_task_id', 'pipeline_id', 'pipeline_stage_id', 'release_id', 'roadmap_phase_id')
+                              'process_run_id', 'process_step_id', 'pipeline_id', 'pipeline_stage_id', 'release_id', 'roadmap_phase_id')
 ) x;
 
 -- A task's change lands with the job it is on AND that job's project, resolved through the
@@ -765,19 +765,29 @@ insert into processes (process_key, process_name, process_stage, process_scope, 
 select 'behaviour_probe_0081', 'Behaviour probe 0081', 'Construction', 'job', 999, lifecycle_substage_id
   from lifecycle_substages where lifecycle_stage_id = 'construction' and lifecycle_substage_name = 'Footings'
 on conflict (process_key) do nothing;
-insert into process_tasks (process_id, process_task_name, process_task_expected_days)
-select process_id, 'probe template task', 4 from processes where process_key = 'behaviour_probe_0081';
-insert into process_task_checklist_items (process_task_id, process_task_checklist_item_text)
-select process_task_id, 'probe template line' from process_tasks where process_task_name = 'probe template task';
+insert into process_steps (process_id, process_step_kind, process_step_name, process_step_expected_days, process_step_position)
+select process_id, 'task', 'probe template task', 4, 1 from processes where process_key = 'behaviour_probe_0081';
+insert into process_steps (process_id, process_step_kind, process_step_name, parent_process_step_id, process_step_position)
+select process_id, 'checklist', 'probe template line', process_step_id, 2
+  from process_steps where process_step_name = 'probe template task';
+-- The run makes its own tasks now (0130), so the insert is the instantiation.
 insert into process_runs (process_id, job_id, process_run_status)
 select process_id, '9106-002', 'in_progress' from processes where process_key = 'behaviour_probe_0081';
-select instantiate_process_tasks(process_run_id) as made
-from process_runs r join processes p using (process_id) where p.process_key = 'behaviour_probe_0081';
 select case when t.task_expected_days = 4 and d.task_checklist_total = 1
-  then 'ok  instantiation copied the template''s 4 expected days and its checklist line'
+  then 'ok  starting the run made the task with its 4 expected days and its checklist line'
   else 'FAIL: instantiated task has ' || coalesce(t.task_expected_days::text, 'null') || ' days and ' || d.task_checklist_total || ' lines' end
 from tasks t join task_display d using (task_id)
 where t.task_name = 'probe template task';
+-- And the task names the step it came from, on the column 0131 renamed.
+select case when t.process_step_id = s.process_step_id
+  then 'ok  the task names its step through tasks.process_step_id'
+  else 'FAIL: the instantiated task does not name its step' end
+from tasks t, process_steps s
+where t.task_name = 'probe template task' and s.process_step_name = 'probe template task';
+select case when instantiate_process_steps(r.process_run_id) = 0
+  then 'ok  a second instantiation of the same run makes nothing'
+  else 'FAIL: instantiate_process_steps made tasks twice' end
+from process_runs r join processes p using (process_id) where p.process_key = 'behaviour_probe_0081';
 
 -- stage_completion: the probe process is open on 9106-002's Construction stage.
 select case when processes_open >= 1 and processes_total >= processes_open
@@ -1165,11 +1175,11 @@ select process_run_id as task_run from process_runs
 select case
   when count(*) = (select count(*) from process_steps
                     where process_id = :'task_process' and process_step_kind = 'task')
-   and count(*) = count(process_task_id)
+   and count(*) = count(process_step_id)
   then 'ok  starting a run made ' || count(*) || ' tasks, each naming the step it came from'
   else 'FAIL: ' || count(*) || ' tasks for ' ||
        (select count(*) from process_steps where process_id = :'task_process' and process_step_kind = 'task') ||
-       ' task steps, ' || count(process_task_id) || ' naming a step' end
+       ' task steps, ' || count(process_step_id) || ' naming a step' end
 from tasks where process_run_id = :'task_run';
 
 select case when instantiate_process_steps(:'task_run') = 0

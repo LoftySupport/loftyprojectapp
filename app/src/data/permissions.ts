@@ -57,6 +57,10 @@ export const PERMISSION_RULES: readonly PermissionRule[] = [
   { object: "Projects", action: "Create and edit", needs: "user", enforcedBy: "projects INSERT/UPDATE ≥ user" },
   { object: "Projects", action: "Delete", needs: "admin", enforcedBy: "projects DELETE ≥ admin" },
 
+  { object: "Processes", action: "Make a run's tasks (repair a run started before 0130)", needs: "user",
+    enforcedBy: "instantiate_process_steps() is SECURITY INVOKER, so the tasks INSERT policy decides",
+    note: "0130 wrote it SECURITY DEFINER and granted it to authenticated, which made the RPC a way past RLS on tasks — a demo account that could not insert one task could call it and insert sixteen. 0131 put it back to invoker; the trigger that calls it on run start is the definer, so a run started by anyone still gets its tasks." },
+
   { object: "Jobs", action: "Create and edit", needs: "user", enforcedBy: "jobs INSERT/UPDATE ≥ user" },
   { object: "Jobs", action: "Move between lifecycle phases", needs: "manager",
     enforcedBy: "guard_job_stage_change() trigger, 0038",

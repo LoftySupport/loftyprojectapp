@@ -6,23 +6,20 @@ import type {
   MyPropertyAccess,
   NewLifecycleSubstage,
   NewProcess,
-  NewProcessTask,
   NewPropertyAccess,
   Process,
   ProcessDependency,
   ProcessHistoryEntry,
   ProcessPatch,
-  ProcessProperty,
   ProcessStep,
+  NewProcessStep,
+  ProcessStepPatch,
   ProcessStepDependency,
   ProcessRunStepState,
   ProcessStepKind,
   ProcessRun,
   ProcessRunPatch,
   ProcessRunStatus,
-  ProcessTask,
-  ProcessTaskDependency,
-  ProcessTaskPatch,
   PropertyAccess,
   PropertyOption,
   PropertyValue,
@@ -41,7 +38,7 @@ import type {
  *
  * TWO RPCS, BOTH SECURITY INVOKER
  *
- *   `push_project_properties` and `instantiate_process_tasks` are the first RPC calls in
+ *   `push_project_properties` and `instantiate_process_steps` are the first RPC calls in
  *   the app. Both run as the caller, so the policies decide — a push copies only what
  *   the person may read onto jobs they may write — and neither is a way around RLS.
  *
@@ -60,13 +57,11 @@ type PropertyProcessMethods = Pick<Repository,
   | "listProcesses" | "createProcess" | "updateProcess" | "deleteProcess" | "reorderProcesses" | "listProcessHistory"
   | "listSubstages" | "createSubstage" | "updateSubstage" | "reorderSubstages"
   | "listProcessDependencies" | "setProcessDependencies"
-  | "listProcessProperties" | "setProcessProperties"
-  | "listProcessTasks" | "createProcessTask" | "updateProcessTask" | "deleteProcessTask"
-  | "listProcessTaskDependencies" | "setProcessTaskDependencies"
-  | "listProcessSteps" | "listProcessStepDependencies"
+  | "listProcessSteps" | "listProcessStepDependencies" | "setProcessStepDependencies"
+  | "createProcessStep" | "updateProcessStep" | "deleteProcessStep" | "reorderProcessSteps"
   | "listRunStepStates" | "exemptRunStep" | "clearRunStepExemption"
   | "listProcessRuns" | "startProcessRun" | "updateProcessRun" | "deleteProcessRun"
-  | "instantiateProcessTasks"
+  | "instantiateProcessSteps"
 >;
 
 const requireTarget = (t: RecordTarget) => {
@@ -468,39 +463,7 @@ export function propertyProcessMethods(client: SupabaseClient): PropertyProcessM
       return this.listProcessDependencies();
     },
 
-    async listProcessProperties(): Promise<ProcessProperty[]> {
-      const { data, error } = await client.from("process_properties")
-        .select("process_id, property_def_key, process_property_position, process_property_required")
-        .order("process_property_position");
-      if (error) throw error;
-      return (data as unknown as ProcPropRow[]).map(r => ({
-        processId: r.process_id, propertyKey: r.property_def_key,
-        position: r.process_property_position, required: r.process_property_required
-      }));
-    },
-
-    async setProcessProperties(processId, properties): Promise<ProcessProperty[]> {
-      const del = await client.from("process_properties").delete().eq("process_id", processId);
-      if (del.error) throw del.error;
-      if (properties.length) {
-        const ins = await client.from("process_properties").insert(properties.map((p, i) => ({
-          process_id: processId, property_def_key: p.propertyKey,
-          process_property_position: i + 1, process_property_required: p.required
-        })));
-        if (ins.error) throw ins.error;
-      }
-      return this.listProcessProperties();
-    },
-
-    // ----------------------------------------------------- template tasks
-    async listProcessTasks(processId?: string): Promise<ProcessTask[]> {
-      let q = client.from("process_tasks").select(PTASK_COLUMNS).order("process_task_position");
-      if (processId) q = q.eq("process_id", processId);
-      const { data, error } = await q;
-      if (error) throw error;
-      return (data as unknown as PTaskRow[]).map(toProcessTask);
-    },
-
+    // ------------------------------------------------------------- steps
     async listProcessSteps(processId?: string): Promise<ProcessStep[]> {
       let q = client.from("process_steps").select(STEP_COLUMNS).order("process_step_position");
       if (processId) q = q.eq("process_id", processId);
@@ -571,68 +534,103 @@ export function propertyProcessMethods(client: SupabaseClient): PropertyProcessM
       if (error) throw error;
     },
 
-    async createProcessTask(input: NewProcessTask): Promise<ProcessTask> {
-      const { data, error } = await client.from("process_tasks").insert({
+    async createProcessStep(input: NewProcessStep): Promise<ProcessStep> {
+      // The end of the list unless the caller says otherwise. Read-then-write rather than a
+      // default of 0: the editor shows steps in position order, and a second step at 0 would
+      // sort against the first by nothing at all.
+      let position = input.position;
+      if (position == null) {
+        const { data: last, error: lastError } = await client.from("process_steps")
+          .select("process_step_position").eq("process_id", input.processId)
+          .order("process_step_position", { ascending: false }).limit(1);
+        if (lastError) throw lastError;
+        position = (last?.[0]?.process_step_position ?? 0) + 1;
+      }
+      const { data, error } = await client.from("process_steps").insert({
         process_id: input.processId,
-        parent_process_task_id: input.parentId ?? null,
-        process_task_name: input.name,
-        process_task_owning_team: input.owningTeam ?? null,
-        process_task_expected_days: input.expectedDays ?? null,
-        process_task_is_external: input.isExternal ?? false,
-        process_task_position: input.position ?? 0
-      }).select(PTASK_COLUMNS).single();
+        process_step_kind: input.kind,
+        process_step_position: position,
+        process_step_is_required: input.isRequired ?? true,
+        process_step_name: input.name ?? null,
+        property_def_key: input.propertyKey ?? null,
+        process_step_stamps_property_key: input.stampsPropertyKey ?? null,
+        process_step_owning_team: input.owningTeam ?? null,
+        process_step_expected_days: input.expectedDays ?? null,
+        process_step_is_external: input.isExternal ?? false,
+        parent_process_step_id: input.parentId ?? null,
+        process_step_automation: input.automation ?? null
+      }).select(STEP_COLUMNS).single();
       if (error) throw error;
-      return toProcessTask(data as unknown as PTaskRow);
+      return toProcessStep(data as unknown as StepRow);
     },
 
-    async updateProcessTask(id: string, patch: ProcessTaskPatch): Promise<ProcessTask> {
+    async updateProcessStep(id: string, patch: ProcessStepPatch): Promise<ProcessStep> {
       const row: Record<string, unknown> = {};
-      if ("name" in patch) row.process_task_name = patch.name;
-      if ("parentId" in patch) row.parent_process_task_id = patch.parentId ?? null;
-      if ("owningTeam" in patch) row.process_task_owning_team = patch.owningTeam ?? null;
-      if ("expectedDays" in patch) row.process_task_expected_days = patch.expectedDays ?? null;
-      if ("isExternal" in patch) row.process_task_is_external = patch.isExternal;
-      if ("position" in patch) row.process_task_position = patch.position;
-      const { data, error } = await client.from("process_tasks").update(row).eq("process_task_id", id)
-        .select(PTASK_COLUMNS).maybeSingle();
+      if ("position" in patch) row.process_step_position = patch.position;
+      if ("isRequired" in patch) row.process_step_is_required = patch.isRequired;
+      if ("name" in patch) row.process_step_name = patch.name ?? null;
+      if ("propertyKey" in patch) row.property_def_key = patch.propertyKey ?? null;
+      if ("stampsPropertyKey" in patch) row.process_step_stamps_property_key = patch.stampsPropertyKey ?? null;
+      if ("owningTeam" in patch) row.process_step_owning_team = patch.owningTeam ?? null;
+      if ("expectedDays" in patch) row.process_step_expected_days = patch.expectedDays ?? null;
+      if ("isExternal" in patch) row.process_step_is_external = patch.isExternal;
+      if ("parentId" in patch) row.parent_process_step_id = patch.parentId ?? null;
+      if ("automation" in patch) row.process_step_automation = patch.automation ?? null;
+      const { data, error } = await client.from("process_steps").update(row).eq("process_step_id", id)
+        .select(STEP_COLUMNS).maybeSingle();
       if (error) throw error;
-      if (!data) throw new Error("The template task was not updated — it no longer exists, or you do not have permission.");
-      return toProcessTask(data as unknown as PTaskRow);
+      if (!data) throw new Error("The step was not updated — it no longer exists, or you do not have permission.");
+      return toProcessStep(data as unknown as StepRow);
     },
 
-    async deleteProcessTask(id: string): Promise<void> {
-      const { data, error } = await client.from("process_tasks").delete().eq("process_task_id", id).select("process_task_id");
+    async deleteProcessStep(id: string): Promise<void> {
+      const { data, error } = await client.from("process_steps").delete().eq("process_step_id", id)
+        .select("process_step_id");
       if (error) throw error;
-      if (!data?.length) throw new Error("The template task was not removed — it no longer exists, or you do not have permission.");
+      if (!data?.length) throw new Error("The step was not removed — it no longer exists, or you do not have permission.");
     },
 
-    async listProcessTaskDependencies(processId: string): Promise<ProcessTaskDependency[]> {
-      // Filter through the task's process with an inner embed — the dependency row
-      // itself does not carry the process.
-      const { data, error } = await client.from("process_task_dependencies")
-        .select("process_task_id, depends_on_process_task_id, process_task_dependency_lag_days, task:process_tasks!process_task_dependencies_process_task_id_fkey!inner(process_id)")
-        .eq("task.process_id", processId);
-      if (error) throw error;
-      return (data as unknown as PTaskDepRow[]).map(r => ({
-        taskId: r.process_task_id, dependsOnTaskId: r.depends_on_process_task_id,
-        lagDays: r.process_task_dependency_lag_days
-      }));
+    async reorderProcessSteps(processId: string, stepIds: string[]): Promise<ProcessStep[]> {
+      // One update per step, 1..n, and no parking pass: 0128 left the position deliberately
+      // non-unique so a reorder is n writes rather than 2n. The process is in the filter as
+      // well as the id, so a step id from another process updates nothing and says so.
+      for (let i = 0; i < stepIds.length; i += 1) {
+        const { data, error } = await client.from("process_steps")
+          .update({ process_step_position: i + 1 })
+          .eq("process_step_id", stepIds[i]).eq("process_id", processId)
+          .select("process_step_id");
+        // n writes, not one transaction, so a failure part-way leaves the steps before it
+        // renumbered. The message says so rather than claiming nothing was saved: a person
+        // who reloads and finds the order half-changed has been told the wrong thing twice.
+        if (error) {
+          throw new Error(`${error.message} — ${i} of ${stepIds.length} steps had already been renumbered. Reload before trying again.`);
+        }
+        if (!data?.length) {
+          throw new Error(`The order was only partly saved: ${i} of ${stepIds.length} steps moved before one of them turned out to be gone, or not yours to move. Reload before trying again.`);
+        }
+      }
+      return this.listProcessSteps(processId);
     },
 
-    async setProcessTaskDependencies(taskId, dependsOn): Promise<ProcessTaskDependency[]> {
-      const { data: task, error: tErr } = await client.from("process_tasks").select("process_id")
-        .eq("process_task_id", taskId).maybeSingle();
-      if (tErr) throw tErr;
-      if (!task) throw new Error("That template task no longer exists.");
-      const del = await client.from("process_task_dependencies").delete().eq("process_task_id", taskId);
+    async setProcessStepDependencies(stepId, dependsOn): Promise<ProcessStepDependency[]> {
+      // The process comes from the step, not the caller — it is half of both composite keys,
+      // and the foreign keys 0128 put on them refuse a depends-on from another process.
+      const { data: step, error: stepError } = await client.from("process_steps")
+        .select("process_id").eq("process_step_id", stepId).maybeSingle();
+      if (stepError) throw stepError;
+      if (!step) throw new Error("That step no longer exists.");
+      const del = await client.from("process_step_dependencies").delete().eq("process_step_id", stepId);
       if (del.error) throw del.error;
       if (dependsOn.length) {
-        const ins = await client.from("process_task_dependencies").insert(dependsOn.map(d => ({
-          process_task_id: taskId, depends_on_process_task_id: d.taskId, process_task_dependency_lag_days: d.lagDays
+        const ins = await client.from("process_step_dependencies").insert(dependsOn.map(d => ({
+          process_id: step.process_id,
+          process_step_id: stepId,
+          depends_on_process_step_id: d.stepId,
+          process_step_dependency_lag_days: d.lagDays
         })));
         if (ins.error) throw ins.error;
       }
-      return this.listProcessTaskDependencies(task.process_id);
+      return this.listProcessStepDependencies(step.process_id);
     },
 
     // -------------------------------------------------------------- runs
@@ -686,8 +684,8 @@ export function propertyProcessMethods(client: SupabaseClient): PropertyProcessM
       if (!data?.length) throw new Error("The run was not removed — it no longer exists, or you do not have permission.");
     },
 
-    async instantiateProcessTasks(runId: string): Promise<number> {
-      const { data, error } = await client.rpc("instantiate_process_tasks", { p_process_run_id: runId });
+    async instantiateProcessSteps(runId: string): Promise<number> {
+      const { data, error } = await client.rpc("instantiate_process_steps", { p_process_run_id: runId });
       if (error) throw error;
       return Number(data ?? 0);
     }
@@ -837,7 +835,6 @@ const toSubstage = (r: SubstageRow): LifecycleSubstage => ({
 });
 
 type DepRow = { process_id: string; depends_on_process_id: string; process_dependency_lag_days: number };
-type ProcPropRow = { process_id: string; property_def_key: string; process_property_position: number; process_property_required: boolean };
 
 /** `process_steps` (0128): one ordered list per process, of four kinds. */
 const STEP_COLUMNS =
@@ -876,20 +873,6 @@ const toProcessStep = (r: StepRow): ProcessStep => ({
   automation: r.process_step_automation,
   importRef: r.process_step_import_ref
 });
-
-const PTASK_COLUMNS =
-  "process_task_id, process_id, parent_process_task_id, process_task_name, process_task_owning_team, process_task_expected_days, process_task_is_external, process_task_position, process_task_import_ref";
-type PTaskRow = {
-  process_task_id: string; process_id: string; parent_process_task_id: string | null; process_task_name: string;
-  process_task_owning_team: string | null; process_task_expected_days: number | null;
-  process_task_is_external: boolean; process_task_position: number; process_task_import_ref: number | null;
-};
-const toProcessTask = (r: PTaskRow): ProcessTask => ({
-  id: r.process_task_id, processId: r.process_id, parentId: r.parent_process_task_id, name: r.process_task_name,
-  owningTeam: r.process_task_owning_team, expectedDays: r.process_task_expected_days,
-  isExternal: r.process_task_is_external, position: r.process_task_position, importRef: r.process_task_import_ref
-});
-type PTaskDepRow = { process_task_id: string; depends_on_process_task_id: string; process_task_dependency_lag_days: number };
 
 const RUN_COLUMNS =
   "process_run_id, process_id, process_key, process_name, process_stage, process_substage_id, process_substage_name, process_scope, process_owning_team, process_is_milestone, process_is_external, process_expected_days, process_at_risk_lead_days, process_position, job_id, project_id, record_project_id, process_run_attempt, process_run_status, process_run_waiting_on, process_run_started_at, process_run_completed_at, process_run_completed_by, process_run_note, process_run_due_date, process_run_at_risk_date, process_run_health, process_run_days_taken";
