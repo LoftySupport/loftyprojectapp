@@ -231,7 +231,7 @@ export function ProcessesPanel({
                         </span>
                         <span className="proc-sub">
                           {[
-                            p.stageGroup,
+                            p.substageName,
                             p.owningTeam ? teamName(p.owningTeam, teams) : null,
                             readable.length ? `${recordedHere} of ${readable.length} recorded` : null,
                             requiredMissing ? `${requiredMissing} required missing` : null,

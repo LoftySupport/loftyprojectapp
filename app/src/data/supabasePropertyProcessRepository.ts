@@ -1,7 +1,10 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Repository } from "./repository";
 import type {
+  LifecycleSubstage,
+  LifecycleSubstagePatch,
   MyPropertyAccess,
+  NewLifecycleSubstage,
   NewProcess,
   NewProcessTask,
   NewPropertyAccess,
@@ -51,6 +54,7 @@ type PropertyProcessMethods = Pick<Repository,
   | "listPropertyValues" | "setPropertyValue" | "clearPropertyValue" | "listPropertyValueHistory"
   | "pushProjectProperties"
   | "listProcesses" | "createProcess" | "updateProcess" | "deleteProcess" | "reorderProcesses" | "listProcessHistory"
+  | "listSubstages" | "createSubstage" | "updateSubstage" | "reorderSubstages"
   | "listProcessDependencies" | "setProcessDependencies"
   | "listProcessProperties" | "setProcessProperties"
   | "listProcessTasks" | "createProcessTask" | "updateProcessTask" | "deleteProcessTask"
@@ -292,14 +296,64 @@ export function propertyProcessMethods(client: SupabaseClient): PropertyProcessM
      * the order they land in does not matter for correctness, but a hundred parallel
      * requests against one table is a thundering herd for no gain.
      */
-    async reorderProcesses(orders: { id: string; stageGroup: string | null; position: number }[]): Promise<void> {
+    async reorderProcesses(orders: { id: string; substageId: string | null; position: number }[]): Promise<void> {
       for (const o of orders) {
         const { data, error } = await client.from("processes")
-          .update({ process_position: o.position, process_stage_group: o.stageGroup })
+          .update({ process_position: o.position, lifecycle_substage_id: o.substageId })
           .eq("process_id", o.id).select("process_id");
         if (error) throw error;
         if (!data?.length) {
           throw new Error("The order was not saved — one of those processes no longer exists, or you do not have permission.");
+        }
+      }
+    },
+
+    // ---- sub-stages (0127) -----------------------------------------------------
+    async listSubstages(): Promise<LifecycleSubstage[]> {
+      const { data, error } = await client.from("lifecycle_substages").select(SUBSTAGE_COLUMNS)
+        .order("lifecycle_stage_id").order("lifecycle_substage_position").order("lifecycle_substage_name");
+      if (error) throw error;
+      return ((data ?? []) as unknown as SubstageRow[]).map(toSubstage);
+    },
+    /**
+     * The stage arrives as its display name, because that is what every screen holds; the
+     * slug it is stored under is looked up here rather than carried by the caller.
+     */
+    async createSubstage(input: NewLifecycleSubstage): Promise<LifecycleSubstage> {
+      const { data: stage, error: stageError } = await client.from("lifecycle_stages")
+        .select("lifecycle_stage_id").eq("lifecycle_stage_name", input.stageName).maybeSingle();
+      if (stageError) throw stageError;
+      if (!stage) throw new Error(`${input.stageName} is not a lifecycle stage.`);
+      const { data, error } = await client.from("lifecycle_substages").insert({
+        lifecycle_stage_id: stage.lifecycle_stage_id,
+        lifecycle_substage_name: input.name.trim(),
+        ...(input.position !== undefined ? { lifecycle_substage_position: input.position } : {}),
+        ...(input.description !== undefined ? { lifecycle_substage_description: input.description || null } : {})
+      }).select(SUBSTAGE_COLUMNS).single();
+      if (error) throw error;
+      return toSubstage(data as unknown as SubstageRow);
+    },
+    async updateSubstage(id: string, patch: LifecycleSubstagePatch): Promise<LifecycleSubstage> {
+      const row: Record<string, unknown> = {};
+      if (patch.name !== undefined) row.lifecycle_substage_name = patch.name.trim();
+      if ("position" in patch) row.lifecycle_substage_position = patch.position;
+      if ("description" in patch) row.lifecycle_substage_description = patch.description || null;
+      if ("isActive" in patch) row.lifecycle_substage_is_active = patch.isActive;
+      const { data, error } = await client.from("lifecycle_substages").update(row)
+        .eq("lifecycle_substage_id", id).select(SUBSTAGE_COLUMNS).maybeSingle();
+      if (error) throw error;
+      // RLS filters a write below manager to zero rows rather than refusing it; say so.
+      if (!data) throw new Error("The sub-stage was not changed — editing sub-stages needs manager or above.");
+      return toSubstage(data as unknown as SubstageRow);
+    },
+    async reorderSubstages(orders: { id: string; position: number }[]): Promise<void> {
+      for (const o of orders) {
+        const { data, error } = await client.from("lifecycle_substages")
+          .update({ lifecycle_substage_position: o.position })
+          .eq("lifecycle_substage_id", o.id).select("lifecycle_substage_id");
+        if (error) throw error;
+        if (!data?.length) {
+          throw new Error("The order was not saved — one of those sub-stages no longer exists, or you do not have permission.");
         }
       }
     },
@@ -632,20 +686,26 @@ type HistoryRow = {
 // — created_by and updated_by from the audit quartet — and PostgREST refuses to guess
 // between them (PGRST201), so an unqualified `profiles(...)` embed fails the whole read.
 const PROCESS_COLUMNS =
-  "process_id, process_key, process_name, process_stage, process_stage_group, process_scope, process_owning_team, process_expected_days, process_at_risk_lead_days, process_is_milestone, process_is_external, process_position, process_is_active, process_description, process_automation, process_sharepoint_folder, process_import_ref, process_updated_at, profiles!processes_process_updated_by_fkey(profile_full_name)";
+  "process_id, process_key, process_name, process_stage, lifecycle_substage_id, process_is_optional, process_scope, process_owning_team, process_expected_days, process_at_risk_lead_days, process_is_milestone, process_is_external, process_position, process_is_active, process_description, process_automation, process_sharepoint_folder, process_import_ref, process_updated_at, profiles!processes_process_updated_by_fkey(profile_full_name), lifecycle_substages!processes_lifecycle_substage_id_fkey(lifecycle_substage_name, lifecycle_substage_position)";
 type ProcessRow = {
   process_id: string; process_key: string; process_name: string; process_stage: string;
-  process_stage_group: string | null; process_scope: Process["scope"]; process_owning_team: string | null;
+  lifecycle_substage_id: string | null; process_is_optional: boolean;
+  process_scope: Process["scope"]; process_owning_team: string | null;
   process_expected_days: number | null; process_at_risk_lead_days: number | null;
   process_is_milestone: boolean; process_is_external: boolean; process_position: number;
   process_is_active: boolean; process_description: string | null; process_automation: string | null;
   process_sharepoint_folder: string | null; process_import_ref: string | null;
   process_updated_at: string;
   profiles: { profile_full_name: string | null } | null;
+  lifecycle_substages: { lifecycle_substage_name: string; lifecycle_substage_position: number } | null;
 };
 const toProcess = (r: ProcessRow): Process => ({
   id: r.process_id, key: r.process_key, name: r.process_name, stageName: r.process_stage,
-  stageGroup: r.process_stage_group, scope: r.process_scope, owningTeam: r.process_owning_team,
+  substageId: r.lifecycle_substage_id,
+  substageName: r.lifecycle_substages?.lifecycle_substage_name ?? null,
+  substagePosition: r.lifecycle_substages?.lifecycle_substage_position ?? null,
+  isOptional: r.process_is_optional,
+  scope: r.process_scope, owningTeam: r.process_owning_team,
   expectedDays: r.process_expected_days, atRiskLeadDays: r.process_at_risk_lead_days,
   isMilestone: r.process_is_milestone, isExternal: r.process_is_external, position: r.process_position,
   isActive: r.process_is_active, description: r.process_description, automation: r.process_automation,
@@ -657,7 +717,8 @@ const processRow = (p: Partial<NewProcess>): Record<string, unknown> => {
   if ("key" in p) row.process_key = p.key;
   if ("name" in p) row.process_name = p.name;
   if ("stageName" in p) row.process_stage = p.stageName;
-  if ("stageGroup" in p) row.process_stage_group = p.stageGroup || null;
+  if ("substageId" in p) row.lifecycle_substage_id = p.substageId || null;
+  if ("isOptional" in p) row.process_is_optional = p.isOptional;
   if ("scope" in p) row.process_scope = p.scope;
   if ("owningTeam" in p) row.process_owning_team = p.owningTeam || null;
   if ("expectedDays" in p) row.process_expected_days = p.expectedDays ?? null;
@@ -670,6 +731,20 @@ const processRow = (p: Partial<NewProcess>): Record<string, unknown> => {
   if ("sharepointFolder" in p) row.process_sharepoint_folder = p.sharepointFolder || null;
   return row;
 };
+
+const SUBSTAGE_COLUMNS =
+  "lifecycle_substage_id, lifecycle_stage_id, lifecycle_substage_name, lifecycle_substage_position, lifecycle_substage_is_active, lifecycle_substage_description, lifecycle_stages!lifecycle_substages_lifecycle_stage_id_fkey(lifecycle_stage_name)";
+type SubstageRow = {
+  lifecycle_substage_id: string; lifecycle_stage_id: string; lifecycle_substage_name: string;
+  lifecycle_substage_position: number; lifecycle_substage_is_active: boolean; lifecycle_substage_description: string | null;
+  lifecycle_stages: { lifecycle_stage_name: string } | null;
+};
+const toSubstage = (r: SubstageRow): LifecycleSubstage => ({
+  id: r.lifecycle_substage_id, stageId: r.lifecycle_stage_id,
+  stageName: r.lifecycle_stages?.lifecycle_stage_name ?? r.lifecycle_stage_id,
+  name: r.lifecycle_substage_name, position: r.lifecycle_substage_position,
+  isActive: r.lifecycle_substage_is_active, description: r.lifecycle_substage_description
+});
 
 type DepRow = { process_id: string; depends_on_process_id: string; process_dependency_lag_days: number };
 type ProcPropRow = { process_id: string; property_def_key: string; process_property_position: number; process_property_required: boolean };
@@ -689,10 +764,11 @@ const toProcessTask = (r: PTaskRow): ProcessTask => ({
 type PTaskDepRow = { process_task_id: string; depends_on_process_task_id: string; process_task_dependency_lag_days: number };
 
 const RUN_COLUMNS =
-  "process_run_id, process_id, process_key, process_name, process_stage, process_stage_group, process_scope, process_owning_team, process_is_milestone, process_is_external, process_expected_days, process_at_risk_lead_days, process_position, job_id, project_id, record_project_id, process_run_attempt, process_run_status, process_run_waiting_on, process_run_started_at, process_run_completed_at, process_run_completed_by, process_run_note, process_run_due_date, process_run_at_risk_date, process_run_health, process_run_days_taken";
+  "process_run_id, process_id, process_key, process_name, process_stage, process_substage_id, process_substage_name, process_scope, process_owning_team, process_is_milestone, process_is_external, process_expected_days, process_at_risk_lead_days, process_position, job_id, project_id, record_project_id, process_run_attempt, process_run_status, process_run_waiting_on, process_run_started_at, process_run_completed_at, process_run_completed_by, process_run_note, process_run_due_date, process_run_at_risk_date, process_run_health, process_run_days_taken";
 type RunRow = {
   process_run_id: string; process_id: string; process_key: string; process_name: string; process_stage: string;
-  process_stage_group: string | null; process_scope: Process["scope"]; process_owning_team: string | null;
+  process_substage_id: string | null; process_substage_name: string | null;
+  process_scope: Process["scope"]; process_owning_team: string | null;
   process_is_milestone: boolean; process_is_external: boolean; process_expected_days: number | null;
   process_at_risk_lead_days: number | null; process_position: number;
   job_id: string | null; project_id: number | null; record_project_id: number | null;
@@ -703,7 +779,7 @@ type RunRow = {
 };
 const toRun = (r: RunRow): ProcessRun => ({
   id: r.process_run_id, processId: r.process_id, processKey: r.process_key, processName: r.process_name,
-  stageName: r.process_stage, stageGroup: r.process_stage_group, scope: r.process_scope,
+  stageName: r.process_stage, substageId: r.process_substage_id, substageName: r.process_substage_name, scope: r.process_scope,
   owningTeam: r.process_owning_team, isMilestone: r.process_is_milestone, isExternal: r.process_is_external,
   expectedDays: r.process_expected_days, atRiskLeadDays: r.process_at_risk_lead_days, position: r.process_position,
   jobId: r.job_id, projectId: r.project_id, recordProjectId: r.record_project_id,

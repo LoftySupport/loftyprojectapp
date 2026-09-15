@@ -180,7 +180,7 @@ export function PropertySlots({
               {!processId && g.processes.length > 0 && (pg.process || g.processes.length > 1) && (
                 <div className="slot-process-head">
                   <span>{pg.process ? pg.process.name : "Not tied to a process"}</span>
-                  {pg.process?.stageGroup && <span className="slot-sub">{pg.process.stageGroup}</span>}
+                  {pg.process?.substageName && <span className="slot-sub">{pg.process.substageName}</span>}
                 </div>
               )}
               {pg.defs.map(d => {

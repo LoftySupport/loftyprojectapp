@@ -466,6 +466,23 @@ BEGIN
   EXCEPTION WHEN foreign_key_violation THEN RAISE NOTICE 'ok  property_defs_stage_is_a_lifecycle_stage rejected "Framing" (a key to lifecycle_stages since 0126)';
     WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  property_defs_stage)', SQLERRM; END;
 
+  -- 0127: a process's sub-stage belongs to its stage, and an active process has one. Both
+  -- raise 23514, so both read as the checks they are.
+  BEGIN
+    INSERT INTO processes (process_key, process_name, process_stage, process_scope, lifecycle_substage_id)
+    SELECT 'probe_0127_wrong_stage', 'Probe 0127', 'Construction', 'job', lifecycle_substage_id
+      FROM lifecycle_substages WHERE lifecycle_stage_id = 'pre_construction' AND lifecycle_substage_name = 'Stage 1';
+    RAISE WARNING 'FAIL: a Construction process was filed under a Pre-construction sub-stage';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  a process cannot sit in another stage''s sub-stage (0127)';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  sub-stage in its stage)', SQLERRM; END;
+
+  BEGIN
+    INSERT INTO processes (process_key, process_name, process_stage, process_scope)
+    VALUES ('probe_0127_no_substage', 'Probe 0127', 'Construction', 'job');
+    RAISE WARNING 'FAIL: an active process with no sub-stage was accepted';
+  EXCEPTION WHEN check_violation THEN RAISE NOTICE 'ok  an active process needs a sub-stage (0127)';
+    WHEN OTHERS THEN RAISE WARNING 'FAIL: unexpected %  (ok  active process has a sub-stage)', SQLERRM; END;
+
   BEGIN
     INSERT INTO property_defs (property_def_key, property_def_label, property_def_scope,
                                property_def_stage, property_def_owning_team, property_def_format)

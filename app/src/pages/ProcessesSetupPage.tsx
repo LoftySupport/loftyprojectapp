@@ -12,10 +12,12 @@ import { SortHeader, sortRows, type SortState } from "../components/SortableTabl
 import { BlurText, NumberInput } from "../components/InlineInputs";
 import { GroupPicker } from "../components/GroupPicker";
 import {
-  NO_GROUP, groupLabel, moveGroup, moveProcess, ordersToWrite, spliceGroup, spliceProcess, stageOrder
+  NO_GROUP, groupKey, groupLabel, moveProcess, moveSubstage, ordersToWrite, spliceProcess, spliceSubstage, stageOrder,
+  substageOrdersToWrite
 } from "../data/pipelineOrder";
 import {
   PROPERTY_SCOPES, WORKING_STAGES, teamName,
+  type LifecycleSubstage,
   type NewProcess, type Process, type ProcessDependency, type ProcessHistoryEntry, type ProcessPatch, type ProcessTask,
   type ProcessTaskChecklistItem, type ProcessTaskDependency, type PropertyScope, type Team, type TeamId
 } from "../data/types";
@@ -93,6 +95,7 @@ export function ProcessesSetupPage() {
   const { data: deps } = useQuery(r => r.listProcessDependencies(), [], [reload]);
   const { byProcess: propsByProcess } = useProcessProperties(reload);
   const { data: allTasks } = useQuery(r => r.listProcessTasks(), [], [reload]);
+  const { data: substages } = useQuery(r => r.listSubstages(), [], [reload]);
 
   const selectedId = params.get("process");
   const creating = params.get("new") === "1";
@@ -127,29 +130,27 @@ export function ProcessesSetupPage() {
     return m;
   }, [allTasks]);
   /**
-   * The groups on offer when a process is filed into one: the blocks that already exist
-   * in ITS stage first, then every other block name in use.
-   *
-   * Both halves matter. A process being added to Pre-construction almost always belongs
-   * to one of Pre-construction's own blocks, so those come first; but the vocabulary is
-   * shared across stages — "Stage 1", "Variation" — and offering the rest is what keeps
-   * a new stage's blocks named like every other stage's instead of freshly invented.
+   * The sub-stages a process can be filed into: its own stage's, active ones, in the
+   * stage's order (0127). Before the sub-stages were rows this offered every stage's group
+   * names as one shared vocabulary; a sub-stage belongs to one stage, and the database
+   * refuses a process filed under another stage's, so only the stage's own are offered.
    */
-  const groupsForStage = useMemo(() => {
-    const inStage = (stage: string) => [...new Set(
-      processes.filter(p => p.stageName === stage && p.stageGroup).map(p => p.stageGroup as string)
-    )].sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-    return (stage: string) => {
-      const mine = inStage(stage);
-      const rest = [...new Set(processes.map(p => p.stageGroup).filter((g): g is string => Boolean(g)))]
-        .filter(g => !mine.includes(g))
-        .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-      return [...mine, ...rest];
-    };
-  }, [processes]);
+  const substagesFor = useMemo(() => {
+    const byStage = new Map<string, LifecycleSubstage[]>();
+    substages.forEach(s => { (byStage.get(s.stageName) ?? byStage.set(s.stageName, []).get(s.stageName)!).push(s); });
+    return (stage: string) =>
+      (byStage.get(stage) ?? []).filter(s => s.isActive).sort((a, b) => a.position - b.position || a.name.localeCompare(b.name));
+  }, [substages]);
+
+  /** A new sub-stage from the picker: made here so the list reloads with it in. */
+  async function createSubstage(stageName: string, name: string): Promise<string | null> {
+    setError(null);
+    try { const s = await repo.createSubstage({ stageName, name }); bump(); return s.id; }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); return null; }
+  }
 
   const groupNames = useMemo(
-    () => [...new Set(processes.map(p => groupLabel(p.stageGroup)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
+    () => [...new Set(processes.map(p => groupLabel(p)))].sort((a, b) => a.localeCompare(b, undefined, { numeric: true })),
     [processes]
   );
 
@@ -159,8 +160,8 @@ export function ProcessesSetupPage() {
       (showRetired || p.isActive || p.id === selectedId)
       && (!stageFilter || p.stageName === stageFilter)
       && (!teamFilter || p.owningTeam === teamFilter)
-      && (!groupFilter || groupLabel(p.stageGroup) === groupFilter)
-      && terms.every(t => `${p.name} ${p.key} ${p.stageGroup ?? ""} ${p.owningTeam ? teamName(p.owningTeam, teams) : ""}`.toLowerCase().includes(t))
+      && (!groupFilter || groupLabel(p) === groupFilter)
+      && terms.every(t => `${p.name} ${p.key} ${p.substageName ?? ""} ${p.owningTeam ? teamName(p.owningTeam, teams) : ""}`.toLowerCase().includes(t))
     );
   }, [processes, search, showRetired, selectedId, stageFilter, teamFilter, groupFilter, teams]);
   const visible = useMemo(() => new Set(shown.map(p => p.id)), [shown]);
@@ -169,7 +170,7 @@ export function ProcessesSetupPage() {
   const columns = useMemo(() => ({
     pipeline: (p: Process) => p.position,
     name: (p: Process) => p.name,
-    group: (p: Process) => p.stageGroup,
+    group: (p: Process) => p.substageName,
     stage: (p: Process) => stages.indexOf(p.stageName),
     team: (p: Process) => (p.owningTeam ? teamName(p.owningTeam, teams) : null),
     milestone: (p: Process) => p.isMilestone,
@@ -185,19 +186,20 @@ export function ProcessesSetupPage() {
   const flat = useMemo(() => (pipelineView ? [] : sortRows(shown, columns, sort)), [pipelineView, shown, columns, sort]);
 
   /**
-   * The pipeline, as stage → group → processes, with the stage's running number attached.
+   * The pipeline, as stage → sub-stage → processes, with the stage's running number attached.
    * Built from the FULL stage list so the numbers on screen are the numbers in the column
-   * even when a filter is hiding rows between them, then narrowed to what is shown.
+   * even when a filter is hiding rows between them, then narrowed to what is shown. A block
+   * is keyed by the sub-stage's id (0127) and labelled by its name.
    */
   const pipeline = useMemo(() => stages.map(stage => {
     const ordered = stageOrder(processes.filter(p => p.stageName === stage));
-    const blocks: { group: string; list: { p: Process; n: number }[] }[] = [];
+    const blocks: { key: string; group: string; list: { p: Process; n: number }[] }[] = [];
     ordered.forEach((p, i) => {
-      const g = groupLabel(p.stageGroup);
+      const k = groupKey(p);
       const last = blocks[blocks.length - 1];
       const row = { p, n: i + 1 };
-      if (last && last.group === g) last.list.push(row);
-      else blocks.push({ group: g, list: [row] });
+      if (last && last.key === k) last.list.push(row);
+      else blocks.push({ key: k, group: groupLabel(p), list: [row] });
     });
     const kept = blocks
       .map(b => ({ ...b, list: b.list.filter(r => visible.has(r.p.id)) }))
@@ -222,8 +224,22 @@ export function ProcessesSetupPage() {
   const moveProcessBy = (stage: string, id: string, dir: -1 | 1) =>
     reorder(stage, arr => moveProcess(arr, id, dir));
 
-  const moveGroupBy = (stage: string, group: string, dir: -1 | 1) =>
-    reorder(stage, arr => moveGroup(arr, group, dir));
+  /**
+   * Moving a block moves the SUB-STAGE (0127): its own position among the stage's sub-stages
+   * changes, and the processes follow because they are grouped by it. Only the rows whose
+   * position changed are written.
+   */
+  async function reorderSubstages(stage: string, mutate: (subs: LifecycleSubstage[]) => LifecycleSubstage[]) {
+    const before = substagesFor(stage);
+    const orders = substageOrdersToWrite(before, mutate(before));
+    if (orders.length === 0) return;
+    setError(null);
+    try { await repo.reorderSubstages(orders); bump(); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  }
+
+  const moveGroupBy = (stage: string, substageId: string, dir: -1 | 1) =>
+    reorderSubstages(stage, subs => moveSubstage(subs, substageId, dir));
 
   const onDropProcess = (stage: string, targetId: string) => {
     const d = dragging;
@@ -234,14 +250,13 @@ export function ProcessesSetupPage() {
       void reorder(stage, arr => {
         const to = arr.findIndex(p => p.id === targetId);
         if (to === -1) return arr;
-        return spliceProcess(arr, d.id, to, arr[to].stageGroup ?? null);
+        return spliceProcess(arr, d.id, to, arr[to]);
       });
     } else {
-      void reorder(stage, arr => {
-        const to = arr.findIndex(p => p.id === targetId);
-        if (to === -1) return arr;
-        return spliceGroup(arr, d.id, to);
-      });
+      // A block dropped on a process lands in front of that process's block.
+      const target = processes.find(p => p.id === targetId);
+      if (!target?.substageId || target.substageId === d.id) return;
+      void reorderSubstages(stage, subs => spliceSubstage(subs, d.id, subs.findIndex(s => s.id === target.substageId)));
     }
   };
 
@@ -251,14 +266,13 @@ export function ProcessesSetupPage() {
     if (!d || d.stage !== stage) return;
     if (d.kind === "group") {
       if (d.id === group) return;
-      void reorder(stage, arr => spliceGroup(arr, d.id, arr.findIndex(p => groupLabel(p.stageGroup) === group)));
+      void reorderSubstages(stage, subs => spliceSubstage(subs, d.id, subs.findIndex(s => s.id === group)));
     } else {
-      // Dropped on a heading: joins that group, at the top of it.
+      // Dropped on a heading: joins that sub-stage, at the top of it.
       void reorder(stage, arr => {
-        const to = arr.findIndex(p => groupLabel(p.stageGroup) === group);
+        const to = arr.findIndex(p => groupKey(p) === group);
         if (to === -1) return arr;
-        const target = arr[to];
-        return spliceProcess(arr, d.id, to, target.stageGroup ?? null);
+        return spliceProcess(arr, d.id, to, arr[to]);
       });
     }
   };
@@ -314,8 +328,8 @@ export function ProcessesSetupPage() {
         A process is a piece of work inside a lifecycle stage — <strong>Concept Plan</strong>,
         <strong> Working Drawings</strong>, <strong>1 - Footings</strong>. Inside a stage they run in
         order: the number beside each one is its place in the flow that moves a job through the stage,
-        and the groups are the blocks that flow is made of. Drag a process, or a whole group, to change
-        that order. Click one to open it.
+        and the sub-stages are the blocks that flow is made of. Drag a process, or a whole sub-stage, to
+        change that order. Click one to open it.
       </Text>
 
       {error && <Problem>{error}</Problem>}
@@ -331,7 +345,7 @@ export function ProcessesSetupPage() {
             value={teamFilter} onChange={setTeamFilter} />
         </span>
         <span className="toolbar-control">
-          <Select aria-label="Filter by group" clearable placeholder="All groups" options={groupNames.map(g => ({ value: g, label: g }))}
+          <Select aria-label="Filter by sub-stage" clearable placeholder="All sub-stages" options={groupNames.map(g => ({ value: g, label: g }))}
             value={groupFilter} onChange={setGroupFilter} />
         </span>
         <span className="toolbar-search"><TextField size="small" id="procs-search" inputAriaLabel="Search processes" placeholder="Search…" value={search} onChange={setSearch} /></span>
@@ -401,7 +415,7 @@ export function ProcessesSetupPage() {
                 <tr>
                   <SortHeader<Col> column="pipeline" label="#" sort={sort} onSort={toggleSort} className="num" />
                   <SortHeader<Col> column="name" label="Process" sort={sort} onSort={toggleSort} />
-                  <SortHeader<Col> column="group" label="Group / pipeline" sort={sort} onSort={toggleSort} />
+                  <SortHeader<Col> column="group" label="Sub-stage" sort={sort} onSort={toggleSort} />
                   <SortHeader<Col> column="stage" label="Build lifecycle stage" sort={sort} onSort={toggleSort} />
                   <SortHeader<Col> column="team" label="Team" sort={sort} onSort={toggleSort} />
                   <SortHeader<Col> column="milestone" label="Milestone" sort={sort} onSort={toggleSort} />
@@ -440,7 +454,8 @@ export function ProcessesSetupPage() {
           teams={teams}
           stage={params.get("newStage")}
           group={params.get("newGroup")}
-          groupsFor={groupsForStage}
+          substagesFor={substagesFor}
+          onCreateSubstage={createSubstage}
           onCancel={() => setParam({ new: null, newStage: null, newGroup: null })}
           onCreated={p => { bump(); setParam({ new: null, newStage: null, newGroup: null, process: p.id }); }}
         />
@@ -454,7 +469,8 @@ export function ProcessesSetupPage() {
             deps={deps}
             teams={teams}
             stageNames={stages}
-            groupsFor={groupsForStage}
+            substagesFor={substagesFor}
+            onCreateSubstage={createSubstage}
             canEdit={canEdit}
             onChanged={bump}
             onError={setError}
@@ -490,7 +506,7 @@ function PipelineStageCard({
   confirmDelete, onAskDelete, onDelete, onRename, onAdd
 }: {
   stage: string;
-  blocks: { group: string; list: { p: Process; n: number }[] }[];
+  blocks: { key: string; group: string; list: { p: Process; n: number }[] }[];
   count: number;
   canEdit: boolean;
   dropOn: string | null;
@@ -530,31 +546,31 @@ function PipelineStageCard({
       </div>
 
       {blocks.map((b, bi) => (
-        <div className="pipe-block" key={`${stage}:${b.group}:${bi}`}>
+        <div className="pipe-block" key={`${stage}:${b.key}:${bi}`}>
           <div
-            className={`pipe-group${dropOn === b.group && dragging ? " is-drop" : ""}`}
-            {...dragProps("group", b.group, stage)}
-            onDrop={e => { e.preventDefault(); onDropGroup(stage, b.group); }}
+            className={`pipe-group${dropOn === b.key && dragging ? " is-drop" : ""}`}
+            {...(b.key ? dragProps("group", b.key, stage) : {})}
+            onDrop={e => { e.preventDefault(); if (b.key) onDropGroup(stage, b.key); }}
           >
-            {canEdit && <span className="drag-dots" aria-hidden title="Drag to reorder this group">⠿</span>}
+            {canEdit && b.key && <span className="drag-dots" aria-hidden title="Drag to reorder this sub-stage">⠿</span>}
             <Text type="text2" weight="bold" element="span">{b.group}</Text>
             <Text type="text3" color="secondary" element="span">
               runs {b.list[0].n}–{b.list[b.list.length - 1].n}
             </Text>
-            {canEdit && (
-              <Button size="xs" kind="tertiary" onClick={() => onAdd(stage, b.group)}
+            {canEdit && b.key && (
+              <Button size="xs" kind="tertiary" onClick={() => onAdd(stage, b.key)}
                 aria-label={`Add a process to ${b.group}`}>
                 + Add
               </Button>
             )}
-            {canEdit && (
+            {canEdit && b.key && (
               <span className="pipeline-group-moves">
-                <Button size="xs" kind="tertiary" aria-label={`Move group ${b.group} earlier`}
-                  disabled={bi === 0} onClick={() => onMoveGroup(b.group, -1)}>
+                <Button size="xs" kind="tertiary" aria-label={`Move sub-stage ${b.group} earlier`}
+                  disabled={bi === 0} onClick={() => onMoveGroup(b.key, -1)}>
                   <MoveArrowUp size={16} aria-hidden />
                 </Button>
-                <Button size="xs" kind="tertiary" aria-label={`Move group ${b.group} later`}
-                  disabled={bi === blocks.length - 1} onClick={() => onMoveGroup(b.group, 1)}>
+                <Button size="xs" kind="tertiary" aria-label={`Move sub-stage ${b.group} later`}
+                  disabled={bi === blocks.length - 1} onClick={() => onMoveGroup(b.key, 1)}>
                   <MoveArrowDown size={16} aria-hidden />
                 </Button>
               </span>
@@ -687,7 +703,7 @@ function ProcessRow({
           {p.isExternal && <span className="slot-chip">external</span>}
           {!p.isActive && <span className="slot-chip">retired</span>}
         </td>
-        <td className="muted">{p.stageGroup ?? NO_GROUP}</td>
+        <td className="muted">{p.substageName ?? NO_GROUP}</td>
         <td className="muted">{showStage ? p.stageName : <span className="muted">{p.stageName}</span>}</td>
         <td className="muted">{p.owningTeam ? teamName(p.owningTeam, teams) : "—"}</td>
         {/* Amber asked to see "if it is a milestone" from the list, so it is a column of its
@@ -742,26 +758,30 @@ function ProcessRow({
 }
 
 // ------------------------------------------------------------------ new process
-function NewProcessPanel({ stageNames, teams, stage, group, groupsFor, onCancel, onCreated }: {
+function NewProcessPanel({ stageNames, teams, stage, group, substagesFor, onCreateSubstage, onCancel, onCreated }: {
   stageNames: string[];
   teams: readonly Team[];
   /** The stage its "+ Add a process" was clicked in, so the picker opens on that one. */
   stage?: string | null;
-  /** And the block, when the add came from one — "added into that pipeline". */
+  /** And the sub-stage's id, when the add came from a block: "added into that pipeline". */
   group?: string | null;
-  groupsFor: (stage: string) => string[];
+  substagesFor: (stage: string) => LifecycleSubstage[];
+  onCreateSubstage: (stageName: string, name: string) => Promise<string | null>;
   onCancel: () => void;
   onCreated: (p: Process) => void;
 }) {
   const repo = useRepository();
+  const firstStage = stage ?? WORKING_STAGES[1];
   const [draft, setDraft] = useState<NewProcess>({
-    key: "", name: "", stageName: stage ?? WORKING_STAGES[1], scope: "job",
-    stageGroup: group ?? null
+    key: "", name: "", stageName: firstStage, scope: "job",
+    // The block it was added from, else the stage's first: an active process needs one,
+    // and the database says so if this is left empty.
+    substageId: group ?? substagesFor(firstStage)[0]?.id ?? null
   });
   const [keyTouched, setKeyTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const valid = /^[a-z][a-z0-9_]*$/.test(draft.key) && draft.name.trim() !== "" && draft.stageName !== "";
+  const valid = /^[a-z][a-z0-9_]*$/.test(draft.key) && draft.name.trim() !== "" && draft.stageName !== "" && !!draft.substageId;
 
   async function save() {
     setSaving(true); setError(null);
@@ -794,17 +814,19 @@ function NewProcessPanel({ stageNames, teams, stage, group, groupsFor, onCancel,
         </Field>
         <Field label="Lifecycle stage" required>
           <Select ordered aria-label="Lifecycle stage" options={stageNames.map(s => ({ value: s, label: s }))}
-            value={draft.stageName} onChange={v => setDraft({ ...draft, stageName: v })} />
+            value={draft.stageName}
+            onChange={v => setDraft({ ...draft, stageName: v, substageId: substagesFor(v)[0]?.id ?? null })} />
         </Field>
         {/* Amber, 3 Sep: "when adding a process to a group it can [be] selected from that
             pipeline [and] added into that pipeline". It was not on this panel at all, so a
             new process could only be filed into a block by saving it and reopening it. */}
-        <Field label="Group / pipeline" hint="the block it runs in inside the stage">
+        <Field label="Sub-stage" required hint="the block it runs in inside the stage; a stage with none needs one made first">
           <GroupPicker
-            value={draft.stageGroup ?? null}
-            groups={groupsFor(draft.stageName)}
-            noneLabel="Not in a group"
-            onChange={g => setDraft({ ...draft, stageGroup: g })}
+            value={draft.substageId ?? null}
+            groups={substagesFor(draft.stageName)}
+            noneLabel="Choose a sub-stage"
+            onChange={id => setDraft({ ...draft, substageId: id })}
+            onCreate={name => onCreateSubstage(draft.stageName, name)}
           />
         </Field>
         <Field label="Appears on" required hint="the project's drawer, or each job's — it does not limit which properties the process can collect">
@@ -822,14 +844,15 @@ function NewProcessPanel({ stageNames, teams, stage, group, groupsFor, onCancel,
 }
 
 // -------------------------------------------------------------------- the editor
-function ProcessEditor({ process: p, all, deps, teams, stageNames, groupsFor, canEdit, onChanged, onError, onDeleted }: {
+function ProcessEditor({ process: p, all, deps, teams, stageNames, substagesFor, onCreateSubstage, canEdit, onChanged, onError, onDeleted }: {
   process: Process;
   all: Process[];
   deps: ProcessDependency[];
   teams: readonly Team[];
   stageNames: string[];
-  /** The blocks on offer for a stage — its own first, then the shared vocabulary. */
-  groupsFor: (stage: string) => string[];
+  /** The sub-stages a stage has, active, in the stage's order (0127). */
+  substagesFor: (stage: string) => LifecycleSubstage[];
+  onCreateSubstage: (stageName: string, name: string) => Promise<string | null>;
   canEdit: boolean;
   onChanged: () => void;
   onError: (e: string | null) => void;
@@ -859,7 +882,7 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, groupsFor, ca
         <div className="panel-head">
           <div>
             <div className="slot-sub">
-              <code>{p.key}</code> · {p.stageName}{p.stageGroup && <> · {p.stageGroup}</>}{p.importRef && <> · from {p.importRef}</>}
+              <code>{p.key}</code> · {p.stageName}{p.substageName && <> · {p.substageName}</>}{p.importRef && <> · from {p.importRef}</>}
               {p.isMilestone && <span className="slot-chip is-current">milestone</span>}
               {!p.isActive && <span className="slot-chip">retired</span>}
             </div>
@@ -880,22 +903,29 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, groupsFor, ca
           <Field label="Name" required>
             <BlurText value={p.name} disabled={!canEdit || saving} label="Process name" onCommit={v => v.trim() && patch({ name: v.trim() })} wide />
           </Field>
+          {/* A stage with no sub-stages is not offered: an active process needs one (0127), so
+              moving there would be refused. Moving to a stage that has some lands in its
+              first, shown in the field below so it can be changed on the spot. */}
           <Field label="Lifecycle stage" required>
             {canEdit ? (
-              <Select ordered aria-label="Lifecycle stage" options={stageNames.map(s => ({ value: s, label: s }))} value={p.stageName} onChange={v => patch({ stageName: v })} />
+              <Select ordered aria-label="Lifecycle stage"
+                options={stageNames.filter(s => s === p.stageName || substagesFor(s).length > 0).map(s => ({ value: s, label: s }))}
+                value={p.stageName}
+                onChange={v => patch({ stageName: v, substageId: substagesFor(v)[0]?.id ?? null })} />
             ) : <Text type="text2">{p.stageName}</Text>}
           </Field>
-          <Field label="Group / pipeline" hint="the block it runs in inside the stage — Stage 1, Stage 2, Variation. Reorder the blocks on the list">
+          <Field label="Sub-stage" required hint="the block it runs in inside the stage: Stage 1, Footings, 1 Month. Reorder the blocks on the list">
             {canEdit
               ? (
                 <GroupPicker
-                  value={p.stageGroup}
-                  groups={groupsFor(p.stageName)}
+                  value={p.substageId}
+                  groups={substagesFor(p.stageName)}
                   noneLabel={NO_GROUP}
-                  onChange={g => patch({ stageGroup: g })}
+                  onChange={id => patch({ substageId: id })}
+                  onCreate={name => onCreateSubstage(p.stageName, name)}
                 />
               )
-              : <BlurText value={p.stageGroup ?? ""} disabled label="Group" onCommit={() => {}} plain />}
+              : <Text type="text2">{p.substageName ?? NO_GROUP}</Text>}
           </Field>
           {/*
             Was "Runs on", and read as though it also decided which properties the process
@@ -925,6 +955,9 @@ function ProcessEditor({ process: p, all, deps, teams, stageNames, groupsFor, ca
           </Field>
           <Field label="External" hint="council, SA Water, a consultant — late is not the team's fault">
             <Checkbox label="Waits on somebody outside Lofty" checked={p.isExternal} disabled={!canEdit || saving} onChange={() => patch({ isExternal: !p.isExternal })} />
+          </Field>
+          <Field label="Optional">
+            <Checkbox label="Optional in its sub-stage" checked={p.isOptional} disabled={!canEdit || saving} onChange={() => patch({ isOptional: !p.isOptional })} />
           </Field>
           <Field label="Number in the stage" hint="its place in the flow. Dragging on the list renumbers the whole stage; this sets one">
             <NumberInput value={p.position} disabled={!canEdit || saving} label="Number in the stage" onCommit={v => patch({ position: v ?? 0 })} />
@@ -987,7 +1020,8 @@ const FIELD_LABELS: Record<string, string> = {
   process_name: "Name",
   process_key: "Key",
   process_stage_name: "Lifecycle stage",
-  process_stage_group: "Group",
+  lifecycle_substage_id: "Sub-stage",
+  process_is_optional: "Optional",
   process_scope: "Appears on",
   process_owning_team: "Team",
   process_expected_days: "Expected days",
@@ -1083,7 +1117,7 @@ function DependenciesEditor({ process: p, all, waitsOn, leadsTo, byId, canEdit, 
       {canEdit && (
         <div className="field-inline" style={{ marginTop: "var(--space-8)", flexWrap: "wrap" }}>
           <Select aria-label="Add a process this waits on" clearable placeholder="Add a process this waits on…"
-            options={candidates.map(c => ({ value: c.id, label: `${c.name} (${c.stageName}${c.stageGroup ? `, ${c.stageGroup}` : ""})` }))}
+            options={candidates.map(c => ({ value: c.id, label: `${c.name} (${c.stageName}${c.substageName ? `, ${c.substageName}` : ""})` }))}
             value={adding} onChange={v => setAdding(v)} />
           <Button size="small" disabled={!adding} onClick={() => { if (adding) { write([...current, { processId: adding, lagDays: 0 }]); setAdding(null); } }}>Add</Button>
         </div>

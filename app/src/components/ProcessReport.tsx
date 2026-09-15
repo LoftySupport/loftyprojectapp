@@ -93,7 +93,7 @@ export function ProcessReport({ jobs }: { jobs: BoardJob[] }) {
         "Processes",
         [
           { label: "Process", text: r => r.process.name },
-          { label: "Stage", text: r => r.process.stageName + (r.process.stageGroup ? ` · ${r.process.stageGroup}` : "") },
+          { label: "Stage", text: r => r.process.stageName + (r.process.substageName ? ` · ${r.process.substageName}` : "") },
           { label: "Team", text: r => (r.process.owningTeam ? teamName(r.process.owningTeam, teams) : null) },
           { label: "Runs", numeric: true, text: r => r.runs },
           { label: "Open", numeric: true, text: r => r.open },
@@ -169,7 +169,7 @@ export function ProcessReport({ jobs }: { jobs: BoardJob[] }) {
                 {rows.map(r => (
                   <tr key={r.process.id}>
                     <td><strong>{r.process.name}</strong>{r.process.isMilestone && <span className="slot-chip">milestone</span>}</td>
-                    <td className="muted">{r.process.stageName}{r.process.stageGroup ? ` · ${r.process.stageGroup}` : ""}</td>
+                    <td className="muted">{r.process.stageName}{r.process.substageName ? ` · ${r.process.substageName}` : ""}</td>
                     <td className="muted">{r.process.owningTeam ? teamName(r.process.owningTeam, teams) : "—"}</td>
                     <td className="num">{r.runs}</td>
                     <td className="num">{r.open}</td>

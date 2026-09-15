@@ -99,6 +99,9 @@ import type {
   RecordStaffRole,
   PartyTarget,
   Uuid,
+  LifecycleSubstage,
+  LifecycleSubstagePatch,
+  NewLifecycleSubstage,
   NotificationSettings,
   NotificationType,
   NotificationRule,
@@ -815,7 +818,14 @@ export interface Repository {
    * stage". Position and group are the only two things a drag may change, so they are the
    * only two this sends; a process's name and duration cannot move as a side effect.
    */
-  reorderProcesses(orders: { id: string; stageGroup: string | null; position: number }[]): Promise<void>;
+  reorderProcesses(orders: { id: string; substageId: string | null; position: number }[]): Promise<void>;
+  /** The blocks inside each lifecycle stage (0127), every stage, in position order. */
+  listSubstages(): Promise<LifecycleSubstage[]>;
+  /** Manager and above. A name that exists in the stage already is refused by the database. */
+  createSubstage(input: NewLifecycleSubstage): Promise<LifecycleSubstage>;
+  updateSubstage(id: string, patch: LifecycleSubstagePatch): Promise<LifecycleSubstage>;
+  /** New positions for a stage's sub-stages: what moving a block saves. */
+  reorderSubstages(orders: { id: string; position: number }[]): Promise<void>;
   /**
    * One process's history, newest first — what changed, when, and by whom.
    *
@@ -1262,6 +1272,10 @@ export const ALL_METHODS: RepositoryMethod[] = [
   "updateProcess",
   "deleteProcess",
   "reorderProcesses",
+  "listSubstages",
+  "createSubstage",
+  "updateSubstage",
+  "reorderSubstages",
   "listProcessHistory",
   "listProcessDependencies",
   "setProcessDependencies",
@@ -1481,6 +1495,10 @@ export const METHOD_TABLES: Record<RepositoryMethod, string> = {
   updateProcess: "processes",
   deleteProcess: "processes",
   reorderProcesses: "processes",
+  listSubstages: "lifecycle_substages",
+  createSubstage: "lifecycle_substages",
+  updateSubstage: "lifecycle_substages",
+  reorderSubstages: "lifecycle_substages",
   listProcessHistory: "activity_audit",
   listProcessDependencies: "process_dependencies",
   setProcessDependencies: "process_dependencies",
