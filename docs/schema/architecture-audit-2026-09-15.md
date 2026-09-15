@@ -230,8 +230,10 @@ duplicated migration number~~ (done); ~~add `process_runs` to the audit allowlis
 it already has one); ~~rename or clear `property_def_automation`~~ (renamed `property_def_group`,
 `0124`, applied); ~~decide the email worker~~ (`0125`: a switch-on, nothing queued before it sent,
 external channels off by default, in-app on); ~~drop the profiles backup~~ (`0123`, applied);
-~~index the hot foreign keys~~ (`0123`); ~~fix the `login_activity` policy~~ (`0123`); delete the
-dead code (asked before deleting, per Amber's rule); ~~correct *"five phases"*~~ (done).
+~~index the hot foreign keys~~ (`0123`); ~~fix the `login_activity` policy~~ (`0123`); ~~delete the
+dead code~~ (asked first, per Amber's rule: *"Delete all three"*; the logo script turned out to be
+live and is wired instead); ~~correct *"five phases"*~~ (done). **Stage 0 is complete** once #98
+and the dead-code PR merge and `0125` is applied.
 
 **Stage 1, one lifecycle and real sub-stages (medium, two migrations).** `lifecycle_stages`
 from `pipeline_stages`; `lifecycle_substages` backfilled from `process_stage_group`;
@@ -376,5 +378,8 @@ the words turn out to be Construction's sub-stages and Pre-construction's proces
 and 2 each take a half; merged as #97 and applied live. `claude/stage0-notifications` is `0125`:
 a one-row switch-on, every external row written before it skipped, the worker's claim gated by
 it, the four waiting rows skipped, and the defaults as Amber answered when asked: *"External off,
-in-app stays on"*; PR #98. Each carries its `schema-plan.md` entry. Left of Stage 0: the dead
-code, which is a question to Amber before any file goes.
+in-app stays on"*; PR #98. Each carries its `schema-plan.md` entry. The fifth and last,
+`claude/stage0-dead-code`, asked before deleting, as Amber's rule requires: *"Delete all three"*,
+so the two icon modules and the `NotWired` export go, and `build-logo.mjs`, which the audit had
+counted as dead, is wired as `build:logo` instead, because it generates the logo module the PDF
+and Word exports import.

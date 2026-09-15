@@ -32,7 +32,10 @@ row written before it. The four rows waiting since 12 September are skipped. In-
 gated. Setup → Notifications shows the state. The one question on it, whether *"all off by
 default"* includes in-app, Amber answered the same afternoon: *"External off, in-app stays on"*,
 so every type keeps in-app and loses email from its defaults. Not applied live yet: apply it in
-the same sitting as the merge.
+the same sitting as the merge. **The fifth and last Stage 0 branch, `claude/stage0-dead-code`,**
+removes the two icon modules and the `NotWired` export on Amber's *"Delete all three"*, and wires
+`build-logo.mjs` as `npm run build:logo` instead of deleting it: the audit had counted it as dead,
+and it generates the logo module the PDF and Word exports import.
 
 **The finding that sets everything else up:** three generations of "how a job moves" coexist
 (the `0029` pipeline tables, never written; the `job_stage` column and its triggers, the only
