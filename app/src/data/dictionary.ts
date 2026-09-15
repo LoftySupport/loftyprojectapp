@@ -830,6 +830,24 @@ export const DICTIONARY: DictionaryEntry[] = [
     "The worst health of a stage's sub-stages, for one job (0133). Reads job_substage_health rather than the processes again.",
     "view", "Read-only.", "Read by job_health().", "created"),
 
+  // ------------------------------------------------------- automations (0135)
+  e("automations.automation_id", "Automation",
+    "Something that changes a record because something happened rather than because somebody asked. Eighteen were registered on 15 September: two scheduled scans, the twelve-month archive, five notification triggers, the project and address cascades, the job-number resync, the property push, the completion forecast, and the four things Stages 2 and 3 added.",
+    "uuid", "Primary key.", "automation_runs hangs off it.", "created"),
+  e("automations.automation_key", "Key", "The slug, stable across renames.", "text", "Not null, unique. CHECK: lower snake case.", "—", "created"),
+  e("automations.automation_name", "Name", "What somebody at Lofty would call it.", "text", "Not null, non-blank.", "—", "created"),
+  e("automations.automation_kind", "Kind", "system — something the database already does; step_effect — an automation step inside a process; rule — one somebody built in the app. One table so a process picks from one list (Amber, audit decision 4).", "text", "Not null, default 'system'. CHECK on the three.", "Only system rows exist today.", "created"),
+  e("automations.automation_trigger", "When", "What makes it happen, in words.", "text", "Not null, non-blank.", "—", "created"),
+  e("automations.automation_effect", "What it does", "What it changes, in words. Free text on purpose: an effect vocabulary is decision 4's second half, and inventing one here would be quoted back as though it were agreed.", "text", "Not null, non-blank.", "—", "created"),
+  e("automations.automation_implemented_by", "Where it lives", "The trigger, function or cron job that IS this automation.", "text", "Not null, non-blank.", "The migration refuses to apply if a row names a trigger or function the schema does not have — a registry that cannot be checked against the schema is a document, and documents drift.", "created"),
+  e("automations.automation_is_active", "On", "Whether it should run. NOT YET READ BY ANYTHING: gating the eighteen live mechanisms is its own migration, and Setup → Automations is a list rather than a set of switches until then.", "boolean", "Not null, default true.", "—", "created"),
+  e("automations.automation_last_run_at", "Last run", "When it last did something.", "timestamptz", "Nullable.", "Written when the mechanisms start logging.", "created"),
+
+  // --------------------------------------------------- automation_runs (0135)
+  e("automation_runs.automation_run_id", "Automation run", "One thing one automation did, and when.", "uuid", "Primary key.", "Written by nothing yet.", "created"),
+  e("automation_runs.automation_run_outcome", "Outcome", "changed, nothing_to_do, held or failed. held is \"switched off\", so turning one off leaves a trail rather than silence.", "text", "Not null. CHECK on the four.", "—", "created"),
+  e("automation_runs.automation_run_by", "Who was there", "Whoever was in the session when it fired. Null for a cron job — the honest answer, rather than a service account standing in for a person.", "uuid", "Nullable. FK → profiles.", "—", "created"),
+
   // -------------------------------------------------------------- job_display
   e("job_display.project_type", "Job type (inherited)",
     "The job's type, which is its project's type. Inherited through the view rather than copied onto the job, so there is nowhere for the two to disagree.",
@@ -2004,6 +2022,10 @@ export const TABLE_DESCRIPTIONS: Record<string, string> = {
     "How every sub-stage that still holds work for a job is going (0133): the worst health of its open required processes. Nothing is stored — re-time a process and the roll-up re-reads.",
   job_stage_health:
     "The same one level up (0133): the worst of a stage's sub-stages, for one job. It reads job_substage_health rather than the processes a second time, so a stage can never read healthier than a sub-stage inside it.",
+  automations:
+    "Everything that changes a record because something happened rather than because somebody asked (0135). One row per mechanism, each naming the trigger, function or cron job that IS it, so the list can be checked against the schema rather than believed. The plumbing — timestamps, audit rows, sequence assigners, guards — is deliberately absent: it makes a write correct rather than taking a decision on the business''s behalf. Eighteen rows; nothing reads automation_is_active yet.",
+  automation_runs:
+    "What each automation did, and when (0135). Read by everyone active and written by nobody: the mechanisms write it through a SECURITY DEFINER helper, because a person who could write it could write a history that did not happen. Empty until the migration that gates the eighteen.",
   task_display:
     "A task with its names, counts and derived dates (0081): due (typed, or start + expected days), at-risk (due − lead) and health, computed from today the way process_run_display does. Nothing here is stored — re-time a task and it re-dates.",
   stage_completion:

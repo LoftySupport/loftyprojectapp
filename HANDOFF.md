@@ -121,6 +121,18 @@ move a job; the status derivation overlapped with health, which `0133` has now t
 `job_status` entirely, so what is left to compute it from is worth asking again. **Question 0l**
 is open on the first of those.
 
+**Stage 4 begins with `0135`, on `claude/stage4-automations`:** `automations` and
+`automation_runs`, and **eighteen rows** where the audit counted twelve — Stages 2 and 3 added
+four the same day, and the working-drawings prefix is two triggers rather than one. Every row
+names the trigger, function or cron job that IS it, and the migration refuses to apply if a
+row names something the schema does not have. The plumbing is deliberately absent: an
+automation decides something on the business's behalf, while `moddatetime`, the audit trigger
+and the guards only make a write correct. **Nothing is gated yet** — `automation_is_active` is
+not read by anything, the migration asserts that, and Setup → Automations is a **list rather
+than a set of switches** because a switch that looks like it works and does nothing is worse
+than no switch. `automation_runs` has no write policy at all, the way `job_stage_events` has
+none. Gating the eighteen and the step-effect vocabulary are the next two.
+
 **A review of `0131` and the screens found fifteen things, and one was a hole.**
 `instantiate_process_steps` was SECURITY DEFINER and granted to `authenticated` — `0130`
 wrote it that way where the function it replaces had been invoker since `0081` — so the RPC

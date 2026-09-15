@@ -4755,6 +4755,58 @@ and reopening work does not take the day back. Watched failing twice — with th
 dropped the job named nobody, and with the end date following the derivation both ways it was
 cleared.
 
+### 15 September — the things that run on their own get a name (`0135`)
+
+Stage 4 of the audit, its first migration, on `claude/stage4-automations`.
+
+Audit finding 6: *"Twelve things change data without a person, and the Automations tab says
+'Not built yet'."* None had a name in the app, an on/off, or a log. Amber, decision 4: **the
+registry first, then step effects, and a rule builder later** — *"the ability to create
+addiontal automations like hubspot monday style when needed. processes can pick from either
+list"*. One table with a kind column, so a process picks from one list rather than two.
+
+**The test for what gets registered.** An automation changes a record *because something
+happened*, not because somebody asked. That is why the plumbing is absent: `moddatetime`, the
+audit trigger, `stamp_created_by`, the sequence assigners and every `guard_*` make a write
+correct rather than deciding anything on the business's behalf. Registering them would bury
+the twelve that matter in forty that do not.
+
+**Eighteen rows, not twelve.** The audit counted twelve that morning; Stages 2 and 3 added
+four the same day — a run makes its own tasks, a run closes itself, a job moves itself, a job
+re-reads who it is with — and the working-drawings prefix turned out to be **two** triggers
+rather than one. Where the audit and the schema disagreed, the schema won.
+
+**Every row names the object that IS it**, and the migration refuses to apply if any row names
+a trigger or function the schema does not have. A registry that describes the schema and
+cannot be checked against it is a document, and documents drift. Watched failing: one row
+repointed at a trigger that does not exist, and `0135` raised with its key.
+
+**Nothing is gated, and the screen says so.** `automation_is_active` exists and every row is
+true; no trigger or cron job reads it and none writes a run. The migration asserts that —
+watched failing by adding a function that reads the column — because a migration claiming to
+be a no-op should have to prove it. Setup → Automations is therefore a **list, not a set of
+switches**: a switch that looks like it works and does nothing is worse than no switch, and
+the note at the top of the tab says the switch is not built yet.
+
+**`automation_runs` is write-protected by having no write policy at all.** Everybody active
+reads it; nobody writes it. The mechanisms will write it through a SECURITY DEFINER helper
+when they are gated, because a person who could write it could write a history that did not
+happen — the same stance `0039` took with `job_stage_events`. It joins the nine tables exempt
+from the audit trigger, for the same reason they are: it *is* a log, and auditing a log writes
+two rows every time an automation does one thing.
+
+**A probe that proved nothing, caught by watching it fail.** The log probe originally inserted
+`select automation_id … from automations limit 1`. Run against a *dropped read policy* it
+selected nothing, inserted zero rows, raised no exception, and reported a pass — for the wrong
+reason. It now takes the id from a session setting read by the owner before the role switch,
+and reports the failure whichever policy is broken.
+
+**What is not here.** Gating the eighteen, which is its own migration because switching off
+eighteen live mechanisms is a change to watch rather than skim. And the step-effect
+vocabulary: `process_steps` already has an `automation` kind carrying a note, and giving it
+*set a property, create the tasks, notify an audience, request a folder* is decision 4's
+second half, which needs the registry to point at first.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

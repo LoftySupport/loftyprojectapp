@@ -478,6 +478,7 @@ export function createStubRepository(): Repository {
     async reorderProcessSteps(): Promise<never> { throw new Error("Reordering steps needs Supabase."); },
     async setProcessStepDependencies(): Promise<never> { throw new Error("Editing what a step waits on needs Supabase."); },
     async instantiateProcessSteps(): Promise<never> { throw new Error("Making a run's tasks needs Supabase."); },
+    async listAutomations() { return []; },
     async listProcessRuns() { return []; },
     async startProcessRun(): Promise<never> { throw new Error("Starting a process needs Supabase."); },
     async updateProcessRun(): Promise<never> { throw new Error("Updating a process needs Supabase."); },

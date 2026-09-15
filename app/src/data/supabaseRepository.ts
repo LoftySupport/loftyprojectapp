@@ -70,6 +70,7 @@ import type {
   TaskPatch,
   TaskChecklistItem,
   StageCompletion,
+  Automation,
   RecordTarget,
   PropertyDef,
   PropertyDefPatch,
@@ -120,7 +121,7 @@ const WIRED: RepositoryMethod[] = [
   "listProcessSteps", "listProcessStepDependencies", "setProcessStepDependencies",
   "createProcessStep", "updateProcessStep", "deleteProcessStep", "reorderProcessSteps",
   "listRunStepStates", "exemptRunStep", "clearRunStepExemption",
-  "listProcessRuns", "startProcessRun", "updateProcessRun", "deleteProcessRun", "instantiateProcessSteps",
+  "listProcessRuns", "startProcessRun", "updateProcessRun", "deleteProcessRun", "instantiateProcessSteps", "listAutomations",
   "listProjects", "getProject", "listJobs", "getJob", "railCounts",
   "listMyPins", "pinPage", "unpinPage",
   "createProject", "createJob", "createJobsFromSplit", "deleteJob", "deleteProject",
@@ -2626,6 +2627,32 @@ export function createSupabaseRepository(): Repository {
     async deleteTaskChecklistItem(id: string): Promise<void> {
       const { error } = await client.from("task_checklist_items").delete().eq("task_checklist_item_id", id);
       if (error) throw error;
+    },
+
+    async listAutomations(): Promise<Automation[]> {
+      const { data, error } = await client
+        .from("automations")
+        .select("automation_id, automation_key, automation_name, automation_kind, automation_trigger, automation_effect, automation_implemented_by, automation_is_active, automation_last_run_at, automation_description")
+        .order("automation_kind")
+        .order("automation_key");
+      if (error) throw error;
+      return ((data ?? []) as unknown as {
+        automation_id: string; automation_key: string; automation_name: string;
+        automation_kind: Automation["kind"]; automation_trigger: string; automation_effect: string;
+        automation_implemented_by: string; automation_is_active: boolean;
+        automation_last_run_at: string | null; automation_description: string | null;
+      }[]).map(r => ({
+        id: r.automation_id,
+        key: r.automation_key,
+        name: r.automation_name,
+        kind: r.automation_kind,
+        trigger: r.automation_trigger,
+        effect: r.automation_effect,
+        implementedBy: r.automation_implemented_by,
+        isActive: r.automation_is_active,
+        lastRunAt: r.automation_last_run_at,
+        description: r.automation_description
+      }));
     },
 
     async listStageCompletion(target?: RecordTarget): Promise<StageCompletion[]> {
