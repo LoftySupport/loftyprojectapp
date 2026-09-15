@@ -3789,17 +3789,65 @@ subscription exists, and it reveals nothing.
 cached for the life of the isolate, with `Retry-After` honoured on 429 and paging on collections.
 Three functions were about to hold three copies of it.
 
+### Answered, 15 September — the five questions, and the one that bit back
+
+Amber answered all five in the published page, which stores them with the document rather than in
+a chat log. Recorded here in her words where they are shorter than a paraphrase.
+
+| Question | Answer |
+| --- | --- |
+| The mailbox, and plus addressing | **`hub@mail.lofty.au`**, and *"plus addressing can be switching on"*. So a job's address is `hub+1042-001@mail.lofty.au` and a project's is `hub+1042@mail.lofty.au` |
+| Finance renamed | *"Finance needs to be named Accounts in all areas"* |
+| Acquisition & Development's linked folder | *"every project"*, not on request |
+| Where notifications go | *"the team is called Hub and it will go to general for most notifications"* |
+| The templates | *"project folder has some subfolders and a folder for A&D team. and a subfolder for each job. each job has folders to be determined"* |
+
+**"In all areas" is a display name, and the internal key is not an area.** Every place a person
+reads the team's name says Accounts. `teams.team_id` stays `'finance'`, because `process_key =
+'finance'` in `0079` is a pre-construction process and there is a `finance` property group beside
+it: a rename that searches for the word breaks a process. Nobody sees the key, so nothing is lost
+by leaving it.
+
+**Notifications simplify to one channel.** Hub's General carries most of it, so the eleven-row
+channel map is not needed to start. The per-team mapping stays designed and unbuilt, ready for the
+day "most" turns out to have exceptions. What *most* excludes has not been asked yet and is the
+next question.
+
+### The A&D folder inside the project, and why the obvious build does not work
+
+The template puts an **A&D folder inside the project folder**, and asked who may open it, Amber
+chose **only A&D, restricted inside the project** over leaving it open to everyone. That is a
+clear answer and it collides with how Microsoft Graph works.
+
+**Graph cannot break permission inheritance on a folder.** It can grant a permission on a drive
+item (`invite`) but it has no operation for "stop inheriting from the library", which is what makes
+a folder private inside a library everybody can read. That lives in SharePoint's own API
+(`breakroleinheritance`), and reaching it with an application identity means `Sites.FullControl.All`
+— a permission that lets the app do anything to any site, granted to avoid one folder being
+readable. **Copying will not carry it either:** a copied folder takes the destination's
+permissions, so restricting the template folder once does not make its 119 copies restricted.
+
+**The build that delivers her answer without any of that** is a link. The project folder holds an
+item named *Acquisition & Development* pointing at that project's folder in A&D's own site, whose
+membership already is A&D and is maintained in Teams. Everyone sees the folder is there; only A&D
+can open it; there is no permission set per project to maintain and none to drift. It is also the
+same mechanism as the outward link this entry already describes, pointing the other way.
+
+**Recorded as an open build question rather than decided**, because the difference is visible: a
+link opens in a new place rather than expanding in the library, and that is the thing to check is
+acceptable before it is built.
+
 ### Open, for Amber
 
-1. **Which existing Microsoft team, and which channel in it, does each app team map to?** Eleven
-   mappings, Accounts included. Any that are private channels need a standard one, or email.
-2. **What goes inside the project and job templates?** Not a blocker — whatever is in the folder on
-   the day is what gets copied.
-3. **Is Acquisition & Development's mirror folder made for every project, or only on request?**
-4. **What is the mailbox called, and can plus addressing be enabled?**
+1. **Does a link satisfy "restricted inside the project", or must it be a real folder?** A real one
+   needs `Sites.FullControl.All` and a permission set maintained per project.
+2. **What does "most notifications" exclude?** Everything to General until this is answered.
+3. **What subfolders go in the project template, and in the job template?** *"to be determined"*.
+   Not a blocker: whatever is in the folder on the day is what gets copied.
 
 Settled on 15 September: no new Teams, channels or sites; files in the Hub library only; Accounts
-(formerly Finance) treated like every other team.
+(formerly Finance) named so everywhere a person reads it; `hub@mail.lofty.au` with plus addressing;
+A&D's linked folder on every project.
 
 ## Verification
 
