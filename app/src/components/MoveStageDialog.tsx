@@ -66,8 +66,9 @@ type MoveVerb = "Move" | "Cancel";
  * and costings are stale by then, and its number is on contracts. So coming back is a
  * clone, and this dialog lost a verb.
  *
- * The team pipelines (`job_pipeline_positions`) are a different object and get no
- * modal; this component is only ever mounted for a lifecycle change.
+ * A team's own board was going to be a different object with no modal (0029's
+ * `job_pipeline_positions`); it never had a row and 0137 dropped it, so this component is
+ * the only thing that moves a job and a lifecycle change is the only move there is.
  *
  * The app's `can("manager")` hides the controls that open this; the database's guards
  * (0038, 0039, 0045) are the security. A refusal is shown verbatim — the database's

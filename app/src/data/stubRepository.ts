@@ -394,10 +394,11 @@ export function createStubRepository(): Repository {
      * The stages, with nothing attached to them.
      *
      * This used to return a team per phase and an expected duration — invented, both of
-     * them, and the durations were then drawn as Gantt bars. The database has an owning
-     * team on `pipeline_stages` and the Supabase repository reads it; the stub cannot
-     * know it, and guessing is what produced two sources that disagreed about who owns
-     * Working Drawings.
+     * them, and the durations were then drawn as Gantt bars. Guessing is what produced two
+     * sources that disagreed about who owns Working Drawings. The owning team that used to
+     * live on `pipeline_stages` went with that table in 0137 and has no home on
+     * `lifecycle_stages`: a stage belongs to the whole business, and who picks the work up
+     * is a property of the process inside it.
      */
     async listTemplatePhases(): Promise<TemplatePhase[]> {
       return SEED_STAGES.map(s => ({

@@ -4578,6 +4578,71 @@ it; `0129`'s state view picked up the rename on its own because a view body is a
 rather than text; `ALL_METHODS`, `METHOD_TABLES` and `WIRED` agree with what is implemented;
 no component imports the Supabase client; and the data dictionary regenerates byte-identical.
 
+### 15 September — the August position model goes (`0137`)
+
+Stage 5's first drop. `0029` built the first answer to *where is this job*: a `pipelines` table
+holding `pipeline_stages`, a `job_pipeline_positions` row per job per pipeline, and a
+`job_stage_events` log. `0078` said six weeks later that removing it was *"its own change once
+the lifecycle has another home"*. Stage 1 gave it that home, and this is the change.
+
+| Dropped | Held | Read by |
+| --- | --- | --- |
+| `pipelines` | 1 row, `build_lifecycle` | nothing |
+| `pipeline_stages` | 7 rows, superseded one for one by `lifecycle_stages` | nothing |
+| `job_pipeline_positions` | 0 rows, ever | nothing |
+| `job_stage_events` | 0 rows, ever | nothing |
+
+With them: `guard_pipeline_nesting`, `log_job_stage_event` and `touch_position_entered_at`.
+
+**`pipeline_stages` goes where the audit's catalogue said it would be updated.** That row reads
+*"Becomes `lifecycle_stages`, keeping its SLA columns"*, written before Stage 1 chose to create
+the new table and seed it rather than rename the old one — the right call, because a rename
+cannot turn a uuid primary key into a slug. So the update happened and the husk is what is left.
+Checked on the live database rather than assumed: seven rows against seven, same names, same
+positions, every SLA and lead column null on both sides, no owning team set anywhere. **The
+migration re-checks it** with a FULL join and refuses rather than dropping, so a row that had
+drifted would stop the change instead of disappearing in it.
+
+**The two empty tables are checked for emptiness, not assumed.** A row in either would mean
+something started writing them after the audit read them, which is worth stopping for.
+
+**The audit exemption list is rebuilt from what it currently returns, not written as a
+literal.** `private.audit_exempt_tables()` has gained entries twice this month and `0135` adds
+another on a branch that may merge before or after this one. A literal here would silently undo
+whichever landed first, which is the kind of change nobody reviews twice.
+
+**The last two tables are dropped in one statement** because they point at each other: a
+pipeline names the stage it elaborates and a stage names the pipeline it belongs to. One at a
+time Postgres refuses, and `cascade` would be a way of not reading the error.
+
+**What the harness lost, and what it kept.** Five constraint probes and five behaviour sections
+went with the tables; the count falls from 93 to 88. Four rules were repointed rather than
+deleted, because they are still rules: the saved-view names now check against `lifecycle_stages`
+(the check itself already read that table — only its label said otherwise), and the RLS probe
+that a manager *cannot add a stage* now asks it of `lifecycle_stages`. Two others were already
+duplicated there by `0126` and simply lost their older twin.
+
+**One thing the old probes demonstrated has no equivalent and is not hidden:** a job in two
+places at once. The new model answers that differently — one stage, one sub-stage, and what the
+job is up to inside them is its process runs — so `behaviour.sql` says so in place of the
+sections rather than leaving a gap to be discovered.
+
+**Watched failing:**
+
+| Broken | Reported |
+| --- | --- |
+| A `pipeline_stages` SLA set to 42 | `0137: these stages do not match between pipeline_stages and lifecycle_stages … : Construction` |
+| A row planted in `job_pipeline_positions` | `0137: job_pipeline_positions has 1 rows, where the audit found none. Something writes it.` |
+| The exemption rebuild skipped | `0137 proof: the audit exemption still names job_stage_events` |
+| The `job_stage_events` drop commented out | Postgres: `cannot drop desired object(s) because other objects depend on them` |
+
+**And one assertion that cannot fail, said so in the migration rather than left to look like
+evidence.** *"These are still there"* is unreachable for these four, because their foreign keys
+make Postgres refuse first — which is the stronger guarantee and the one the table above
+records. It is kept as a backstop for the case Postgres cannot catch: `drop table if exists`
+accepts a name that does not exist and says nothing, so a typo would drop three and report
+success.
+
 ## Verification
 
 1. `supabase db reset` against a branch — every migration applies to an empty database in

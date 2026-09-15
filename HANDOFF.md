@@ -16,6 +16,32 @@ Unreleased: 290 changes since then —
 <sub>Generated from commit trailers by `node scripts/changelog.mjs` — do not edit inside this block.</sub>
 <!-- /generated:shipped -->
 
+## 15 September — Stage 5 starts dropping: the August position model is gone (`0137`)
+
+`pipelines`, `pipeline_stages`, `job_pipeline_positions` and `job_stage_events`, plus
+`guard_pipeline_nesting`, `log_job_stage_event` and `touch_position_entered_at`. Audit finding
+1's tail: `0029` built the first answer to *where is this job*, `0078` said removing it was
+*"its own change once the lifecycle has another home"*, Stage 1 gave it that home, and nothing
+had read any of the four since. Two of them never held a row on any database; the other two held
+eight rows between them that `lifecycle_stages` already says.
+
+**It is not applied live.** It goes up when it merges, like everything else.
+
+Three things in it are worth knowing before the next drop is written, because each one will come
+up again:
+
+- **The exemption list is rebuilt from what it returns, not written as a literal.**
+  `private.audit_exempt_tables()` has gained entries twice this month and `0135` adds another on
+  a branch that may merge either side of this one. A literal would silently undo whichever
+  landed first.
+- **Mutually-referencing tables drop in one statement**, never with `cascade`. `cascade` is a
+  way of not reading the error, and it is how a drop takes something nobody meant it to.
+- **The harness loses probes when a table goes, and the count falling is correct** — 93 to 88.
+  What must not happen is a *rule* being lost with them: the saved-view name check and the
+  "a manager cannot add a stage" probe were repointed at `lifecycle_stages` rather than deleted,
+  and the one thing the old probes showed that has no equivalent (a job in two places at once)
+  is written into `behaviour.sql` where the sections were, rather than left as a gap.
+
 ## 15 September — START HERE: the architecture audit, and the process rethink it sets up
 
 Amber, 15 September: *"I want to walk away with a clear picture on what needs to stay, what

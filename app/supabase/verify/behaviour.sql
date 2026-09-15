@@ -92,71 +92,23 @@ select address_history_project_id, address_history_role from address_history;
 select project_id, project_current_address, project_is_current from project_display;
 select job_id, project_id, job_is_current, job_suburb from job_display order by job_id limit 2;
 
-\echo '--- 12. the lifecycle pipeline holds its stages, in order'
-select pipeline_stage_position, pipeline_stage_name, pipeline_stage_type, pipeline_stage_owning_team
-from pipeline_stages ps join pipelines p using (pipeline_id)
-where p.pipeline_key = 'build_lifecycle' order by pipeline_stage_position;
-
-\echo '--- 13. a nested pipeline hangs off a stage of its parent'
-insert into pipelines (pipeline_key, pipeline_name, pipeline_scope, pipeline_position,
-                       pipeline_parent_stage_id)
-select 'preconstruction', 'Pre-construction', 'job', 1, ps.pipeline_stage_id
-from pipeline_stages ps join pipelines p using (pipeline_id)
-where p.pipeline_key = 'build_lifecycle' and ps.pipeline_stage_name = 'Pre-construction';
-
-insert into pipeline_stages (pipeline_id, pipeline_stage_name, pipeline_stage_position, pipeline_stage_owning_team)
-select pipeline_id, n, r::smallint, 'design'
-from pipelines, (values ('Planning Approval',1),('Working Drawings',2),('Development Approval',3)) v(n,r)
-where pipeline_key = 'preconstruction';
-
-select child.pipeline_name as nested_pipeline, parent_stage.pipeline_stage_name as hangs_off,
-       parent.pipeline_name as parent_pipeline
-from pipelines child
-join pipeline_stages parent_stage on parent_stage.pipeline_stage_id = child.pipeline_parent_stage_id
-join pipelines parent on parent.pipeline_id = parent_stage.pipeline_id
-where child.pipeline_key = 'preconstruction';
-
-\echo '--- 14. ONE job sits in TWO pipelines at once, with no contradiction'
-insert into job_pipeline_positions (job_id, pipeline_id, pipeline_stage_id)
-select '9106-002', p.pipeline_id, ps.pipeline_stage_id
-from pipelines p join pipeline_stages ps using (pipeline_id)
-where p.pipeline_key = 'build_lifecycle' and ps.pipeline_stage_name = 'Pre-construction';
-
-insert into job_pipeline_positions (job_id, pipeline_id, pipeline_stage_id)
-select '9106-002', p.pipeline_id, ps.pipeline_stage_id
-from pipelines p join pipeline_stages ps using (pipeline_id)
-where p.pipeline_key = 'preconstruction' and ps.pipeline_stage_name = 'Working Drawings';
-
-select p.pipeline_name, ps.pipeline_stage_name, jpp.job_pipeline_position_state
-from job_pipeline_positions jpp
-join pipelines p using (pipeline_id)
-join pipeline_stages ps on ps.pipeline_stage_id = jpp.pipeline_stage_id
-where jpp.job_id = '9106-002' order by p.pipeline_position, p.pipeline_name;
-
-\echo '--- 15. moving a stage writes history and resets the clock; a state change does not'
-update job_pipeline_positions set pipeline_stage_id = (
-  select ps.pipeline_stage_id from pipeline_stages ps join pipelines p using (pipeline_id)
-  where p.pipeline_key = 'preconstruction' and ps.pipeline_stage_name = 'Development Approval')
-where job_id = '9106-002'
-  and pipeline_id = (select pipeline_id from pipelines where pipeline_key = 'preconstruction');
-
-select count(*) as stage_events_logged from job_stage_events where job_id = '9106-002';
-select coalesce(f.pipeline_stage_name,'(none)') as moved_from, t.pipeline_stage_name as moved_to
-from job_stage_events e
-left join pipeline_stages f on f.pipeline_stage_id = e.job_stage_event_from_stage_id
-join pipeline_stages t on t.pipeline_stage_id = e.job_stage_event_to_stage_id
-where e.job_id = '9106-002' order by e.job_stage_event_id;
-
-\echo '--- 16. blocked is a state: the job keeps its real stage'
-update job_pipeline_positions
-   set job_pipeline_position_state = 'waiting', job_pipeline_position_waiting_on = 'estimating'
- where job_id = '9106-002'
-   and pipeline_id = (select pipeline_id from pipelines where pipeline_key = 'preconstruction');
-select ps.pipeline_stage_name as still_at, jpp.job_pipeline_position_state, jpp.job_pipeline_position_waiting_on
-from job_pipeline_positions jpp join pipeline_stages ps on ps.pipeline_stage_id = jpp.pipeline_stage_id
-where jpp.job_id = '9106-002'
-  and jpp.pipeline_id = (select pipeline_id from pipelines where pipeline_key = 'preconstruction');
-select (select count(*) from job_stage_events where job_id='9106-002') as events_unchanged_by_state_move;
+\echo '--- 12 to 16. the nested pipelines, gone with 0137'
+-- Five sections stood here and each one worked: the lifecycle pipeline holding its stages in
+-- order, a nested pipeline hanging off a stage of its parent, ONE job sitting in TWO pipelines
+-- at once with no contradiction, a move writing a history row and resetting the clock, and
+-- `waiting` as a state that leaves the job where it is.
+--
+-- They are gone because the tables are. `0029` built that model in August, `0078` said in
+-- September that removing it was "its own change once the lifecycle has another home", Stage 1
+-- of the 15 September audit gave it that home in `lifecycle_stages` and `lifecycle_substages`,
+-- and `0137` dropped it. Nothing had read it since: `job_pipeline_positions` and
+-- `job_stage_events` never held a row on any database.
+--
+-- **What was demonstrated here and is not demonstrated anywhere yet:** a job being in two
+-- places at once. The new model answers it differently — a job has one stage and one sub-stage,
+-- and what it is up to inside them is its process runs — so there is no equivalent to move
+-- these probes onto rather than a gap to notice. Stage 3's derivation probes (§47 onwards) are
+-- where that question is asked now.
 
 \echo '--- 17. deleting the HIGHEST job does not reissue its number'
 select job_id as highest from jobs where project_id = 9106 order by job_id desc limit 1 \gset
@@ -712,7 +664,7 @@ from (
       where tc.constraint_type = 'FOREIGN KEY' and tc.table_schema = 'public')
     and c.column_name not in ('project_id', 'job_id', 'profile_id', 'team_id', 'task_id', 'variation_id', 'process_id',
                               'document_id', 'comment_id', 'tag_id', 'address_id', 'property_def_key', 'feedback_id',
-                              'process_run_id', 'process_step_id', 'pipeline_id', 'pipeline_stage_id', 'release_id', 'roadmap_phase_id')
+                              'process_run_id', 'process_step_id', 'release_id', 'roadmap_phase_id')
 ) x;
 
 -- A task's change lands with the job it is on AND that job's project, resolved through the
