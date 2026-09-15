@@ -81,6 +81,13 @@ cleanup deletes only the address it inserted itself. The three orphan *Probe Str
 rows and their audit-trail rows were removed live on 15 September; the leak in the file is not
 fixed, and is a one-line addition to the proof's cleanup for whoever next touches `0122`.
 
+**Stage 0's second branch, `claude/stage0-hygiene`, is `0123`:** the profiles backup dropped, six
+foreign keys on the process tables indexed, and `"read own login_activity"` rewritten into the
+once-per-query form the advisor asks for. No column changes, so `types.ts` and `dictionary.ts`
+do not move; `schema-plan.md` carries the entry and `rls.sql` the probes. Dry-run live in a
+rolled-back transaction. **Not applied live yet**: it drops a table, so the moment is Amber's
+call, and the question is in the chat.
+
 ---
 
 ## 14 September — the maintenance drawer, and the rethink coming after it
